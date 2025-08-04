@@ -16,6 +16,13 @@ email_sender.log
 sent_emails.txt
 failed_emails.txt
 
+# Database files
+db.sqlite3
+db.sqlite3-journal
+
+# Static files
+staticfiles/
+
 # Test and temporary files
 test_recipients.csv
 temp_*.csv
