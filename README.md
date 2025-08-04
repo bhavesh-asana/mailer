@@ -5,7 +5,6 @@ A production-ready Django REST API for email sending with comprehensive features
 ## 🚀 Quick Start
 
 ### 1. Installation
-
 ```bash
 git clone <repository-url>
 cd mailer
@@ -13,41 +12,83 @@ pip install -r requirements.txt
 ```
 
 ### 2. Configuration
-
-Copy the environment template and configure your email settings:
-
 ```bash
 cp .env.example .env
+# Update .env with your SMTP settings
 ```
 
-Update `.env` with your SMTP settings:
-```
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-EMAIL_USERNAME=your-email@gmail.com
-EMAIL_PASSWORD=your-app-password
-USE_TLS=True
-```
-
-### 3. Database Setup (SQLite - No external database required)
-
+### 3. Setup
 ```bash
 python manage.py migrate
 python manage.py setup_default_email_config
-python manage.py createsuperuser  # Optional
-```
-
-### 4. Run the Server
-
-```bash
 python manage.py runserver
 ```
 
 **Or use the automated setup script:**
-
 ```bash
-./setup.sh
+./docs/setup.sh
 ```
+
+## 📚 Documentation
+
+For comprehensive documentation, visit the [Mailer Wiki](../mailer.wiki/):
+
+- **[🏠 Home](../mailer.wiki/Home.md)** - Overview and introduction
+- **[⚡ Quick Start Tutorial](../mailer.wiki/Quick-Start-Tutorial.md)** - Step-by-step guide
+- **[📧 Gmail Setup](../mailer.wiki/GMAIL_SETUP.md)** - Gmail configuration guide
+- **[⚙️ Configuration](../mailer.wiki/Configuration.md)** - Complete configuration options
+- **[🔧 Django Configuration](../mailer.wiki/Django-Configuration.md)** - Django-specific settings
+- **[🔐 Security](../mailer.wiki/Security-Best-Practices.md)** - Security best practices
+- **[🔐 API Security](../mailer.wiki/Django-API-Security.md)** - Django API authentication
+- **[📖 API Reference](../mailer.wiki/API-Reference.md)** - Complete API documentation
+- **[💡 Code Examples](../mailer.wiki/Code-Examples.md)** - Usage examples
+- **[❓ FAQ](../mailer.wiki/FAQ.md)** - Frequently asked questions
+- **[🐛 Troubleshooting](../mailer.wiki/Troubleshooting.md)** - Common issues and solutions
+
+## 🎯 Key Features
+
+- **REST API**: Full REST API with authentication
+- **Email Templates**: Rich text templates with placeholders
+- **Bulk Email**: Send to multiple recipients efficiently  
+- **Campaign Tracking**: Track email campaigns and statistics
+- **File Attachments**: Support for email attachments
+- **Logging**: Comprehensive email sending logs
+- **Admin Interface**: Django admin for easy management
+- **Multiple Providers**: Gmail, Outlook, Yahoo, custom SMTP
+
+## 🔧 Quick Access
+
+- **Admin Panel**: http://127.0.0.1:8000/admin/
+- **API Docs**: http://127.0.0.1:8000/swagger/
+- **API Root**: http://127.0.0.1:8000/api/
+
+## 📁 Project Structure
+
+```
+mailer/
+├── docs/           # Setup scripts and documentation
+├── samples/        # Sample files and test data
+├── tests/          # Test scripts and utilities
+├── email_api/      # Main Django app
+├── mailer/         # Django project settings
+└── staticfiles/    # Static files
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `python -m pytest tests/`
+5. Submit a pull request
+
+## 📄 License
+
+See [LICENSE](LICENSE) file for details.
+
+---
+
+**⭐ Star this repository if you find it useful!**
 
 Visit `http://127.0.0.1:8000/swagger/` for interactive API documentation.
 
@@ -63,7 +104,7 @@ Visit `http://127.0.0.1:8000/swagger/` for interactive API documentation.
 - ✅ **Multiple SMTP Configs** - Support for different email providers
 - ✅ **Django Admin** - Web-based management interface
 - ✅ **Swagger Documentation** - Auto-generated API docs
-- ✅ **Template Variables** - Dynamic content with `$name`, `$email`, etc.
+- ✅ **Template Variables** - Dynamic content with `$name`, `$first_name`, `$last_name`, `$email`, etc.
 
 ## 🛠 API Endpoints
 
