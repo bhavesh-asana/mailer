@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths-ignore:
-      - '.github/workflows/**'  # Ignore workflow changes to prevent infinite loops
+      - '.github/workflows/**'  # Ignore workflow changes to prevent infinite loops                  
       - 'README.md'
       - '*.md'
 
@@ -139,6 +139,11 @@ jobs:
             
             **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.get_tag.outputs.tag }}...${{ steps.create_tag.outputs.final_tag }}
       
+      - name: Get current date
+        if: steps.check_changes.outputs.skip != 'true'
+        id: date
+        run: echo "date=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
       - name: Send release email
         if: steps.check_changes.outputs.skip != 'true'
         continue-on-error: true  # Don't fail the workflow if email fails
@@ -160,7 +165,7 @@ jobs:
             ═══════════════════════════════════════════════════════════════
             �🔖 Tag: ${{ steps.create_tag.outputs.final_tag }}
             📦 Repository: ${{ github.repository }}
-            📅 Release Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+            📅 Release Date: ${{ github.event.head_commit.timestamp }}
             🏷️ Branch: ${{ github.ref_name }}
             
             ═══════════════════════════════════════════════════════════════
