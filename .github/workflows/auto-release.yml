@@ -49,3 +49,23 @@ jobs:
         with:
           tag_name: ${{ steps.bump_version.outputs.new_tag }}
           name: Release ${{ steps.bump_version.outputs.new_tag }}
+      
+      - name: Send release email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "🚀 New Release: ${{ steps.bump_version.outputs.new_tag }}"
+          to: ${{ secrets.EMAIL_TO }}
+          from: ${{ secrets.EMAIL_FROM }}
+          content_type: text/plain
+          body: |
+            A new release has been published!
+
+            🔖 Tag: ${{ steps.bump_version.outputs.new_tag }}
+            📦 Repo: ${{ github.repository }}
+            📄 Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+            🔗 Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.bump_version.outputs.new_tag }}
+
