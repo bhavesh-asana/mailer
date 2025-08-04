@@ -1,12 +1,33 @@
-# Core Python email functionality (built-in modules)
-# No additional packages required for basic functionality
+# Django Email API Requirements
 
-# Optional: For enhanced features
-python-dotenv>=1.0.0  # For loading environment variables from .env file
-pandas>=1.5.0         # For advanced CSV handling (optional)
-openpyxl>=3.0.0       # For Excel file support (optional)
+# Core Django and REST Framework
+django>=4.2.0,<5.0
+djangorestframework>=3.14.0
 
-# For development and testing
-pytest>=7.0.0         # For testing
-black>=22.0.0         # For code formatting
-flake8>=5.0.0         # For code linting
+# API Documentation
+drf-yasg>=1.21.7
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# CORS support
+django-cors-headers>=4.0.0
+
+# Production server
+gunicorn>=21.2.0
+
+# Static files serving
+whitenoise>=6.5.0
+
+# Optional: Background tasks (uncomment if needed)
+# celery>=5.3.0
+# redis>=4.6.0
+
+# Optional: File handling (uncomment if needed)
+# pandas>=1.5.0           # For CSV handling
+# openpyxl>=3.0.0         # For Excel support
+
+# Note: This project uses SQLite by default (no additional database drivers needed)
+# For production with PostgreSQL or MySQL, uncomment and install:
+# psycopg2-binary>=2.9.0  # PostgreSQL
+# mysqlclient>=2.2.0      # MySQL

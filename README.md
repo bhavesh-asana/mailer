@@ -1,50 +1,180 @@
-# Email Sender with File Attachments and CSV Support
+# Mailer Service - Django REST API
 
-This project provides a comprehensive email sending solution with support for:
-- Multiple email recipients from CSV files
-- File attachments
-- Configurable time intervals between emails
-- Error handling and logging
-- Template-based email content
+A production-ready Django REST API for email sending with comprehensive features including templates, bulk emails, campaign tracking, and detailed logging.
 
-## Features
+## 🚀 Quick Start
 
-- **Bulk Email Sending**: Send emails to multiple recipients from a CSV file
-- **File Attachments**: Attach multiple files to emails
-- **Time Intervals**: Configure delays between emails to avoid rate limiting
-- **Template Support**: Use placeholders in subject and body for personalization
-- **Logging**: Comprehensive logging of email sending progress and errors
-- **Multiple SMTP Providers**: Support for Gmail, Outlook, Yahoo, and custom SMTP servers
+### 1. Installation
 
-## Quick Start
+```bash
+git clone <repository-url>
+cd mailer
+pip install -r requirements.txt
+```
 
-1. **Install dependencies** (optional):
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 2. Configuration
 
-2. **Update email configuration** in `mail.py`:
-   ```python
-   config = EmailConfig(
-       smtp_server="smtp.gmail.com",
-       smtp_port=587,
-       username="your_email@gmail.com",
-       password="your_app_password",  # Use App Password for Gmail
-       use_tls=True
-   )
-   ```
+Copy the environment template and configure your email settings:
 
-3. **Prepare your CSV file** with recipient data:
-   ```csv
-   email,name,company
-   john@example.com,John Doe,Tech Corp
-   jane@example.com,Jane Smith,Design Ltd
-   ```
+```bash
+cp .env.example .env
+```
 
-4. **Run the email sender**:
-   ```bash
-   python mail.py
-   ```
+Update `.env` with your SMTP settings:
+```
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+EMAIL_USERNAME=your-email@gmail.com
+EMAIL_PASSWORD=your-app-password
+USE_TLS=True
+```
+
+### 3. Database Setup (SQLite - No external database required)
+
+```bash
+python manage.py migrate
+python manage.py setup_default_email_config
+python manage.py createsuperuser  # Optional
+```
+
+### 4. Run the Server
+
+```bash
+python manage.py runserver
+```
+
+**Or use the automated setup script:**
+
+```bash
+./setup.sh
+```
+
+Visit `http://127.0.0.1:8000/swagger/` for interactive API documentation.
+
+## 📋 Features
+
+- ✅ **REST API** - Send emails via HTTP requests
+- ✅ **SQLite Database** - No external database setup required
+- ✅ **Bulk Email Support** - Send personalized emails to multiple recipients
+- ✅ **Email Templates** - Reusable templates with variable substitution
+- ✅ **Campaign Tracking** - Monitor email campaign performance
+- ✅ **Comprehensive Logging** - Track all email activities
+- ✅ **Multiple SMTP Configs** - Support for different email providers
+- ✅ **Django Admin** - Web-based management interface
+- ✅ **Swagger Documentation** - Auto-generated API docs
+- ✅ **Template Variables** - Dynamic content with `$name`, `$email`, etc.
+
+## 🛠 API Endpoints
+
+### Core Functionality
+- `POST /api/send-email/` - Send single email
+- `POST /api/send-bulk-email/` - Send bulk emails with templates
+- `GET /api/stats/` - Email statistics
+- `GET /api/health/` - Service health check
+
+### Management
+- `/api/templates/` - Email template management
+- `/api/recipients/` - Recipient management
+- `/api/campaigns/` - Email campaign tracking
+- `/api/logs/` - Email activity logs
+- `/api/configurations/` - SMTP configuration management
+
+### Documentation
+- `/swagger/` - Interactive API documentation
+- `/redoc/` - Alternative API documentation
+- `/admin/` - Django admin interface
+
+## 📖 Documentation
+
+Comprehensive documentation is available in the [Wiki](../../wiki):
+
+- **[API Reference](../../wiki/README_API.md)** - Complete API documentation
+- **[Installation Guide](../../wiki/Installation.md)** - Detailed setup instructions
+- **[Configuration](../../wiki/Configuration.md)** - Configuration options
+- **[Quick Start Tutorial](../../wiki/Quick-Start-Tutorial.md)** - Step-by-step tutorial
+- **[Code Examples](../../wiki/Code-Examples.md)** - Usage examples
+- **[Gmail Setup](../../wiki/GMAIL_SETUP.md)** - Gmail configuration guide
+- **[Security Best Practices](../../wiki/Security-Best-Practices.md)** - Security guidelines
+- **[Troubleshooting](../../wiki/Troubleshooting.md)** - Common issues and solutions
+- **[FAQ](../../wiki/FAQ.md)** - Frequently asked questions
+
+## 🔧 Project Structure
+
+```
+mailer/
+├── manage.py                 # Django management script
+├── requirements.txt          # Python dependencies
+├── .env.example             # Environment template
+├── mailer/                  # Django project settings
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+└── email_api/               # Main email API app
+    ├── models.py            # Database models
+    ├── views.py             # API views
+    ├── serializers.py       # API serializers
+    ├── urls.py              # URL routing
+    ├── admin.py             # Django admin config
+    ├── email_service.py     # Core email functionality
+    └── management/          # Management commands
+        └── commands/
+            └── setup_default_email_config.py
+```
+
+## 🚀 Quick API Usage
+
+### Send a Single Email
+```bash
+curl -X POST http://localhost:8000/api/send-email/ 
+  -H "Content-Type: application/json" 
+  -d '{
+    "to_email": "user@example.com",
+    "subject": "Hello World",
+    "body": "This is a test email!"
+  }'
+```
+
+### Send Bulk Emails
+```bash
+curl -X POST http://localhost:8000/api/send-bulk-email/ 
+  -H "Content-Type: application/json" 
+  -d '{
+    "recipients": [
+      {"email": "user1@example.com", "name": "User 1"},
+      {"email": "user2@example.com", "name": "User 2"}
+    ],
+    "subject_template": "Hello $name!",
+    "body_template": "Welcome $name to our service!"
+  }'
+```
+
+## 🔒 Security Notes
+
+- Change `AllowAny` permissions to `IsAuthenticated` in production
+- Use environment variables for sensitive configuration
+- Set up proper CORS settings
+- Use HTTPS in production
+- Consider API rate limiting
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the terms specified in the [LICENSE](LICENSE) file.
+
+## 🆘 Support
+
+- Check the [Wiki documentation](../../wiki)
+- Review [Troubleshooting guide](../../wiki/Troubleshooting.md)
+- Check [FAQ](../../wiki/FAQ.md)
+- Open an issue for bugs or feature requests
+
 
 ## Usage Examples
 
