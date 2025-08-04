@@ -1,0 +1,139 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block title %}Bulk Import Recipients | {{ site_title|default:"Django site admin" }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo; <a href="{% url 'admin:email_api_recipient_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; {% trans 'Bulk Import' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="module">
+    <h1>{% trans "Bulk Import Recipients" %}</h1>
+    
+    <div class="form-row">
+        <div class="form-help">
+            <h3>Instructions:</h3>
+            <ul>
+                <li>Upload a CSV, XLS, or XLSX file with the following required headers: <strong>Display name</strong>, <strong>First name</strong>, <strong>Last name</strong></li>
+                <li>Optional header: <strong>Email</strong> (if not provided, will be auto-generated)</li>
+                <li>The headers are case-insensitive and extra spaces will be ignored</li>
+                <li>Empty rows will be skipped automatically</li>
+                <li>If "Display name" is empty, it will be auto-generated from first and last names</li>
+                <li>If email is not provided, it will be auto-generated in the format: firstname.lastname@example.com</li>
+                <li>If duplicate emails are generated, a number will be appended to make them unique</li>
+                <li>Maximum file size: 10MB</li>
+            </ul>
+            
+            <div style="margin: 15px 0;">
+                <strong>📖 Need help?</strong> Check the <a href="/static/BULK_IMPORT_GUIDE.md" target="_blank">detailed documentation</a> for troubleshooting and best practices.
+            </div>
+            
+            <h4>Sample CSV format:</h4>
+            <div style="background-color: #f8f9fa; padding: 10px; border: 1px solid #dee2e6; font-family: monospace;">
+                Display name,First name,Last name,Email<br>
+                John Doe,John,Doe,john.doe@company.com<br>
+                Jane Smith,Jane,Smith,<br>
+                ,Alice,Johnson,alice.j@example.org
+            </div>
+            
+            <div style="margin-top: 10px;">
+                <strong>💡 Pro tip:</strong> Test with a small file first to verify your format!
+            </div>
+        </div>
+    </div>
+    
+    <form method="post" enctype="multipart/form-data" class="module aligned">
+        {% csrf_token %}
+        
+        {% if form.non_field_errors %}
+            <div class="errornote">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+        
+        <div class="form-row">
+            <div>
+                {{ form.file.label_tag }}
+                {{ form.file }}
+                {% if form.file.errors %}
+                    <ul class="errorlist">
+                        {% for error in form.file.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+                {% if form.file.help_text %}
+                    <div class="help">{{ form.file.help_text }}</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div>
+                {{ form.update_existing }}
+                {{ form.update_existing.label_tag }}
+                {% if form.update_existing.errors %}
+                    <ul class="errorlist">
+                        {% for error in form.update_existing.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+                {% if form.update_existing.help_text %}
+                    <div class="help">{{ form.update_existing.help_text }}</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="submit-row">
+            <input type="submit" value="{% trans 'Import Recipients' %}" class="default" />
+            <a href="{% url 'admin:email_api_recipient_changelist' %}" class="button cancel-link">{% trans 'Cancel' %}</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.form-help {
+    background-color: #e7f3ff;
+    border: 1px solid #b3d4fc;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.form-help h3, .form-help h4 {
+    margin-top: 0;
+    color: #0066cc;
+}
+
+.form-help ul {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.form-help li {
+    margin-bottom: 5px;
+}
+
+.cancel-link {
+    margin-left: 10px;
+    text-decoration: none;
+    color: #666;
+    padding: 8px 16px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+}
+
+.cancel-link:hover {
+    background-color: #e2e6ea;
+    text-decoration: none;
+}
+</style>
+{% endblock %}

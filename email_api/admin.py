@@ -1,6 +1,12 @@
 from django.contrib import admin
 from django import forms
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.urls import path, reverse
+from django.utils.html import format_html
+from django.db import transaction
 from .models import EmailTemplate, Recipient, EmailCampaign, EmailLog, EmailConfiguration, EmailAttachment, TemplateAttachment
+from .forms import BulkImportRecipientsForm
 
 
 class EmailTemplateAdminForm(forms.ModelForm):
@@ -57,10 +63,135 @@ class EmailTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(Recipient)
 class RecipientAdmin(admin.ModelAdmin):
-    list_display = ['email', 'name', 'company', 'is_active', 'created_at']
+    list_display = ['email', 'name', 'first_name', 'last_name', 'company', 'is_active', 'created_at']
     list_filter = ['is_active', 'created_at']
-    search_fields = ['email', 'name', 'company']
+    search_fields = ['email', 'name', 'first_name', 'last_name', 'company']
     readonly_fields = ['created_at', 'updated_at']
+    actions = ['bulk_import_recipients']
+    
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('bulk-import/', self.admin_site.admin_view(self.bulk_import_view), name='email_api_recipient_bulk_import'),
+        ]
+        return custom_urls + urls
+    
+    def bulk_import_recipients(self, request, queryset):
+        """Custom admin action to redirect to bulk import page"""
+        return redirect('admin:email_api_recipient_bulk_import')
+    
+    bulk_import_recipients.short_description = "Bulk import recipients from file"
+    
+    def bulk_import_view(self, request):
+        """Handle bulk import of recipients"""
+        if request.method == 'POST':
+            form = BulkImportRecipientsForm(request.POST, request.FILES)
+            if form.is_valid():
+                try:
+                    recipients_data = form.process_file()
+                    update_existing = form.cleaned_data.get('update_existing', False)
+                    
+                    created_count = 0
+                    updated_count = 0
+                    skipped_count = 0
+                    errors = []
+                    
+                    with transaction.atomic():
+                        for data in recipients_data:
+                            try:
+                                # Handle email generation or validation
+                                email = data.get('email', '').strip()
+                                
+                                if not email:
+                                    # Generate email from names
+                                    first_name = data.get('first_name', '').lower().replace(' ', '')
+                                    last_name = data.get('last_name', '').lower().replace(' ', '')
+                                    
+                                    if first_name and last_name:
+                                        email = f"{first_name}.{last_name}@example.com"
+                                    elif first_name:
+                                        email = f"{first_name}@example.com"
+                                    elif last_name:
+                                        email = f"{last_name}@example.com"
+                                    else:
+                                        errors.append(f"Row {data.get('row_number', 'unknown')}: Cannot generate email without first or last name")
+                                        continue
+                                
+                                # Ensure email is valid and unique
+                                base_email = email
+                                counter = 1
+                                while Recipient.objects.filter(email=email).exists():
+                                    if update_existing:
+                                        break  # We'll update the existing one
+                                    # Generate unique email by adding counter
+                                    name_part, domain = base_email.split('@')
+                                    email = f"{name_part}{counter}@{domain}"
+                                    counter += 1
+                                
+                                # Check if recipient exists
+                                existing_recipient = None
+                                try:
+                                    existing_recipient = Recipient.objects.get(email=email)
+                                except Recipient.DoesNotExist:
+                                    pass
+                                
+                                if existing_recipient:
+                                    if update_existing:
+                                        # Update existing recipient
+                                        existing_recipient.name = data.get('name') or existing_recipient.name
+                                        existing_recipient.first_name = data.get('first_name') or existing_recipient.first_name
+                                        existing_recipient.last_name = data.get('last_name') or existing_recipient.last_name
+                                        existing_recipient.save()
+                                        updated_count += 1
+                                    else:
+                                        skipped_count += 1
+                                else:
+                                    # Create new recipient
+                                    Recipient.objects.create(
+                                        email=email,
+                                        name=data.get('name', ''),
+                                        first_name=data.get('first_name', ''),
+                                        last_name=data.get('last_name', ''),
+                                    )
+                                    created_count += 1
+                                    
+                            except Exception as e:
+                                errors.append(f"Row {data.get('row_number', 'unknown')}: {str(e)}")
+                    
+                    # Prepare success message
+                    success_parts = []
+                    if created_count > 0:
+                        success_parts.append(f"{created_count} recipients created")
+                    if updated_count > 0:
+                        success_parts.append(f"{updated_count} recipients updated")
+                    if skipped_count > 0:
+                        success_parts.append(f"{skipped_count} recipients skipped")
+                    
+                    if success_parts:
+                        messages.success(request, "Import completed successfully: " + ", ".join(success_parts))
+                    
+                    if errors:
+                        error_message = "Some errors occurred during import:\n" + "\n".join(errors[:10])  # Limit to first 10 errors
+                        if len(errors) > 10:
+                            error_message += f"\n... and {len(errors) - 10} more errors"
+                        messages.warning(request, error_message)
+                    
+                    if not errors or (created_count + updated_count) > 0:
+                        return redirect('admin:email_api_recipient_changelist')
+                        
+                except Exception as e:
+                    messages.error(request, f"Error processing file: {str(e)}")
+        else:
+            form = BulkImportRecipientsForm()
+        
+        context = {
+            'form': form,
+            'title': 'Bulk Import Recipients',
+            'opts': self.model._meta,
+            'has_view_permission': True,
+        }
+        
+        return render(request, 'admin/email_api/recipient/bulk_import.html', context)
 
 
 @admin.register(EmailCampaign)

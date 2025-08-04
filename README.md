@@ -56,6 +56,7 @@ Visit `http://127.0.0.1:8000/swagger/` for interactive API documentation.
 - ✅ **REST API** - Send emails via HTTP requests
 - ✅ **SQLite Database** - No external database setup required
 - ✅ **Bulk Email Support** - Send personalized emails to multiple recipients
+- ✅ **Bulk Import Recipients** - Import recipients from CSV/Excel files (Admin + CLI)
 - ✅ **Email Templates** - Reusable templates with variable substitution
 - ✅ **Campaign Tracking** - Monitor email campaign performance
 - ✅ **Comprehensive Logging** - Track all email activities
@@ -78,6 +79,10 @@ Visit `http://127.0.0.1:8000/swagger/` for interactive API documentation.
 - `/api/campaigns/` - Email campaign tracking
 - `/api/logs/` - Email activity logs
 - `/api/configurations/` - SMTP configuration management
+
+### Bulk Operations
+- **Admin Interface** - Bulk import recipients from CSV/Excel files
+- **CLI Command** - `python manage.py import_recipients <file> [--dry-run] [--update-existing]`
 
 ### Documentation
 - `/swagger/` - Interactive API documentation

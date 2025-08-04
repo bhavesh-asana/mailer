@@ -104,12 +104,21 @@ class TemplateAttachment(models.Model):
 class Recipient(models.Model):
     """Model for storing recipient information"""
     email = models.EmailField(unique=True)
-    name = models.CharField(max_length=200, blank=True)
+    name = models.CharField(max_length=200, blank=True, help_text="Display name")
+    first_name = models.CharField(max_length=100, blank=True)
+    last_name = models.CharField(max_length=100, blank=True)
     company = models.CharField(max_length=200, blank=True)
     additional_data = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate display name if not provided
+        if not self.name and (self.first_name or self.last_name):
+            name_parts = [self.first_name, self.last_name]
+            self.name = ' '.join(filter(None, name_parts))
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.name} <{self.email}>" if self.name else self.email
