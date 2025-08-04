@@ -1,0 +1,55 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+.placeholder-buttons {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.placeholder-button {
+    display: inline-block;
+    margin: 2px;
+    padding: 6px 12px;
+    background-color: #007cba;
+    color: white;
+    text-decoration: none;
+    border-radius: 3px;
+    font-size: 12px;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.2s;
+}
+
+.placeholder-button:hover {
+    background-color: #005a87;
+    color: white;
+    text-decoration: none;
+}
+
+.placeholder-section {
+    margin: 15px 0;
+}
+
+.placeholder-section h4 {
+    margin: 0 0 8px 0;
+    color: #333;
+    font-size: 14px;
+}
+
+.placeholder-help {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+}
+</style>
+{% endblock %}
+
+{% block after_field_sets %}
+{{ block.super }}
+{% endblock %}

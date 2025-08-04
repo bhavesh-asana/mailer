@@ -308,6 +308,8 @@ class SendBulkEmailView(APIView):
                     variables = recipient.get('variables', {})
                     variables.update({
                         'name': recipient.get('name', ''),
+                        'first_name': recipient.get('first_name', ''),
+                        'last_name': recipient.get('last_name', ''),
                         'email': recipient['email'],
                         'company': recipient.get('company', '')
                     })

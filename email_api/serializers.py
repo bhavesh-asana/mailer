@@ -85,7 +85,7 @@ class EmailTemplateSerializer(serializers.ModelSerializer):
 class RecipientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Recipient
-        fields = ['id', 'email', 'name', 'company', 'additional_data', 'is_active', 'created_at', 'updated_at']
+        fields = ['id', 'email', 'name', 'first_name', 'last_name', 'company', 'additional_data', 'is_active', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -151,6 +151,8 @@ class BulkEmailRecipientSerializer(serializers.Serializer):
     """Serializer for bulk email recipient"""
     email = serializers.EmailField()
     name = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    first_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
     company = serializers.CharField(max_length=200, required=False, allow_blank=True)
     variables = serializers.DictField(required=False, allow_empty=True)
 

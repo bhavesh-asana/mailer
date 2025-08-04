@@ -35,7 +35,9 @@ class EmailTemplate(models.Model):
     # Template variables help
     VARIABLES_HELP = """
     Available Variables:
-    - $name - Recipient name
+    - $name - Recipient display name
+    - $first_name - Recipient first name
+    - $last_name - Recipient last name
     - $email - Recipient email
     - $company - Recipient company
     - Custom variables can be added in API calls

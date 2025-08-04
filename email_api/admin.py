@@ -18,6 +18,80 @@ class EmailTemplateAdminForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['is_html'].widget = forms.HiddenInput()
         self.fields['is_html'].initial = True
+        
+        # Add help text for placeholders with inline buttons
+        placeholder_help = """
+        <div style="margin-top: 10px; padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
+            <strong>Available Placeholders:</strong>
+            <div style="margin: 8px 0;">
+                <button type="button" onclick="insertPlaceholder('$name')" style="margin: 2px; padding: 4px 8px; background: #007cba; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;">
+                    📋 $name
+                </button>
+                <button type="button" onclick="insertPlaceholder('$first_name')" style="margin: 2px; padding: 4px 8px; background: #007cba; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;">
+                    👤 $first_name
+                </button>
+                <button type="button" onclick="insertPlaceholder('$last_name')" style="margin: 2px; padding: 4px 8px; background: #007cba; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;">
+                    👤 $last_name
+                </button>
+                <button type="button" onclick="insertPlaceholder('$email')" style="margin: 2px; padding: 4px 8px; background: #007cba; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;">
+                    📧 $email
+                </button>
+                <button type="button" onclick="insertPlaceholder('$company')" style="margin: 2px; padding: 4px 8px; background: #007cba; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;">
+                    🏢 $company
+                </button>
+            </div>
+            <div style="margin-top: 8px; font-size: 12px; color: #666;">
+                Click a button to insert at cursor position, or see descriptions below:
+            </div>
+            <ul style="margin: 5px 0; padding-left: 20px; font-size: 12px;">
+                <li><code>$name</code> - Display name (e.g., "John Doe")</li>
+                <li><code>$first_name</code> - First name (e.g., "John")</li>
+                <li><code>$last_name</code> - Last name (e.g., "Doe")</li>
+                <li><code>$email</code> - Email address</li>
+                <li><code>$company</code> - Company name</li>
+            </ul>
+            
+            <script>
+            function insertPlaceholder(placeholder) {
+                console.log('Inserting placeholder:', placeholder);
+                
+                // Try CKEditor 5 first
+                if (window.editor && window.editor.model) {
+                    window.editor.model.change(writer => {
+                        const insertPosition = window.editor.model.document.selection.getFirstPosition();
+                        writer.insertText(placeholder, insertPosition);
+                    });
+                    return;
+                }
+                
+                // Try to find CKEditor instance
+                const ckInstances = window.CKEDITOR?.instances;
+                if (ckInstances) {
+                    const editorName = Object.keys(ckInstances)[0];
+                    if (editorName && ckInstances[editorName]) {
+                        ckInstances[editorName].insertText(placeholder);
+                        return;
+                    }
+                }
+                
+                // Fallback to textarea
+                const bodyField = document.querySelector('#id_body, textarea[name="body"]');
+                if (bodyField) {
+                    const cursorPos = bodyField.selectionStart;
+                    const textBefore = bodyField.value.substring(0, cursorPos);
+                    const textAfter = bodyField.value.substring(cursorPos);
+                    bodyField.value = textBefore + placeholder + textAfter;
+                    bodyField.focus();
+                    bodyField.setSelectionRange(cursorPos + placeholder.length, cursorPos + placeholder.length);
+                }
+            }
+            </script>
+        </div>
+        """
+        
+        self.fields['body'].help_text = (
+            self.fields['body'].help_text + placeholder_help
+        )
 
 
 class TemplateAttachmentInline(admin.TabularInline):
@@ -42,11 +116,12 @@ class EmailTemplateAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Template Information', {
-            'fields': ('name', 'subject')
+            'fields': ('name', 'subject'),
+            'description': 'Basic template information. You can use placeholders like $first_name, $last_name in the subject as well.'
         }),
         ('Email Content', {
             'fields': ('body', 'is_html'),
-            'description': 'Use the rich text editor below to format your email content with bold, italic, lists, links, colors, and more.'
+            'description': 'Use the rich text editor below to format your email content. Use the placeholder buttons to insert recipient-specific variables.'
         }),
         ('Metadata', {
             'fields': ('created_by', 'created_at', 'updated_at'),
