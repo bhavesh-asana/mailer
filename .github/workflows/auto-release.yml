@@ -148,7 +148,7 @@ jobs:
           server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "🚀 New Release: ${{ steps.create_tag.outputs.final_tag }}"
+          subject: "🚀 New Release: Mailer Application"
           to: ${{ secrets.EMAIL_TO }}
           from: ${{ secrets.EMAIL_FROM }}
           content_type: text/plain
