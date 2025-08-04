@@ -1,0 +1,3 @@
+2025-08-04 12:33:31,532 - ERROR - Failed to connect to SMTP server: (534, b'5.7.9 Application-specific password required. For more information, go to\n5.7.9  https://support.google.com/mail/?p=InvalidSecondFactor 586e51a60fabf-307a7473376sm2852618fac.32 - gsmtp')
+2025-08-04 12:34:21,784 - INFO - Loaded 5 recipients from CSV
+2025-08-04 12:34:57,972 - INFO - Loaded 5 recipients from CSV
