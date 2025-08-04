@@ -1,0 +1,12 @@
+# Core Python email functionality (built-in modules)
+# No additional packages required for basic functionality
+
+# Optional: For enhanced features
+python-dotenv>=1.0.0  # For loading environment variables from .env file
+pandas>=1.5.0         # For advanced CSV handling (optional)
+openpyxl>=3.0.0       # For Excel file support (optional)
+
+# For development and testing
+pytest>=7.0.0         # For testing
+black>=22.0.0         # For code formatting
+flake8>=5.0.0         # For code linting

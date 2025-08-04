@@ -1,0 +1,32 @@
+# Email Configuration Example
+# Create a .env file or set these as environment variables for security
+
+# Gmail Configuration (recommended to use App Password)
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+EMAIL_USERNAME=your_email@gmail.com
+EMAIL_PASSWORD=your_app_password
+
+# Outlook/Hotmail Configuration
+# SMTP_SERVER=smtp-mail.outlook.com
+# SMTP_PORT=587
+# EMAIL_USERNAME=your_email@outlook.com
+# EMAIL_PASSWORD=your_password
+
+# Yahoo Configuration
+# SMTP_SERVER=smtp.mail.yahoo.com
+# SMTP_PORT=587
+# EMAIL_USERNAME=your_email@yahoo.com
+# EMAIL_PASSWORD=your_app_password
+
+# Custom SMTP Configuration
+# SMTP_SERVER=your.smtp.server.com
+# SMTP_PORT=587
+# EMAIL_USERNAME=your_username
+# EMAIL_PASSWORD=your_password
+
+# Security Note:
+# - For Gmail, use App Passwords instead of your regular password
+# - Enable 2-factor authentication and generate an App Password
+# - Store credentials in environment variables or .env files
+# - Never commit credentials to version control
