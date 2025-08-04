@@ -1,0 +1,127 @@
+/* CKEditor 5 Responsive Styles for Django Admin - Aggressive Width Fixes */
+
+/* Force width constraints on all CKEditor containers */
+.ck-editor,
+.ck-editor-main,
+.ck-editor__main,
+.django-ckeditor-5,
+.django-ckeditor-5-widget {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: auto !important;
+}
+
+/* Editor content area - Force responsive behavior */
+.ck-editor__editable,
+.ck-content {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: auto !important;
+    word-wrap: break-word !important;
+    word-break: break-word !important;
+}
+
+/* Toolbar responsiveness - Force wrapping */
+.ck-toolbar,
+.ck-toolbar__items {
+    flex-wrap: wrap !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    box-sizing: border-box !important;
+}
+
+/* Django admin form row fixes */
+.form-row .field-body,
+.form-row .field-body > *,
+.form-row .field-body .django-ckeditor-5,
+.form-row .field-body .django-ckeditor-5-widget {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    box-sizing: border-box !important;
+}
+
+/* Prevent horizontal scrolling on parent containers */
+.form-row {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+}
+
+/* Admin change form fixes */
+.change-form .form-row .field-body {
+    padding-right: 0 !important;
+    max-width: 100% !important;
+}
+
+/* CKEditor 5 balloon toolbar responsiveness */
+.ck-balloon-panel {
+    max-width: calc(100vw - 40px) !important;
+}
+
+/* Mobile specific fixes */
+@media (max-width: 768px) {
+    .ck-editor {
+        font-size: 14px !important;
+    }
+    
+    .ck-toolbar {
+        padding: 8px !important;
+        font-size: 12px !important;
+    }
+    
+    .ck-toolbar__items > * {
+        margin: 2px !important;
+    }
+    
+    .ck-editor__editable {
+        min-height: 300px !important;
+        padding: 8px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .ck-editor__editable {
+        min-height: 250px !important;
+        font-size: 16px !important; /* Prevent zoom on mobile */
+        padding: 6px !important;
+    }
+    
+    .ck-toolbar {
+        font-size: 11px !important;
+        padding: 6px !important;
+    }
+    
+    .ck-toolbar__items > * {
+        margin: 1px !important;
+    }
+}
+
+/* Ensure proper spacing in Django admin */
+.field-body .ck-editor {
+    margin-top: 5px;
+    margin-bottom: 10px;
+}
+
+/* Additional width constraints for specific CKEditor elements */
+.ck-widget,
+.ck-widget__selection-handle,
+.ck-dropdown__panel {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Force table responsiveness inside CKEditor */
+.ck-content table {
+    max-width: 100% !important;
+    table-layout: fixed !important;
+}
+
+/* Debug helper - uncomment to see boundaries */
+/*
+.ck-editor {
+    border: 2px solid red !important;
+}
+.form-row {
+    border: 2px solid blue !important;
+}
+*/

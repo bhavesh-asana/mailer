@@ -9,6 +9,7 @@ router.register(r'recipients', views.RecipientViewSet)
 router.register(r'campaigns', views.EmailCampaignViewSet)
 router.register(r'logs', views.EmailLogViewSet)
 router.register(r'configurations', views.EmailConfigurationViewSet)
+router.register(r'attachments', views.EmailAttachmentViewSet)
 
 # The API URLs are now determined automatically by the router.
 urlpatterns = [

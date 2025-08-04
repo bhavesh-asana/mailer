@@ -38,6 +38,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('email_api.urls')),
     
+    # CKEditor 5 URLs
+    path('ckeditor5/', include('django_ckeditor_5.urls')),
+    
     # Swagger documentation URLs
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),

@@ -7,6 +7,9 @@ djangorestframework>=3.14.0
 # API Documentation
 drf-yasg>=1.21.7
 
+# Rich text editor for admin (CKEditor 5 - latest secure version)
+django-ckeditor-5
+
 # Environment variables
 python-dotenv>=1.0.0
 

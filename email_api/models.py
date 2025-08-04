@@ -1,15 +1,46 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.core.files.storage import default_storage
+from django_ckeditor_5.fields import CKEditor5Field
 import json
+import os
 
 
 class EmailTemplate(models.Model):
-    """Model for storing email templates"""
+    """Model for storing email templates with rich formatting"""
     name = models.CharField(max_length=200, unique=True)
     subject = models.CharField(max_length=500)
-    body = models.TextField()
-    is_html = models.BooleanField(default=False)
+    body = CKEditor5Field(
+        config_name='email_template',
+        help_text="Use the rich text editor to format your email content with bold, italic, lists, links, etc."
+    )
+    is_html = models.BooleanField(default=True, help_text="Automatically set to True when using rich text editor")
+    
+    # Rich text formatting options
+    FORMATTING_HELP = """
+    HTML Formatting Guide:
+    - Bold: <b>text</b> or <strong>text</strong>
+    - Italic: <i>text</i> or <em>text</em>
+    - Underline: <u>text</u>
+    - Line break: <br>
+    - Paragraph: <p>text</p>
+    - Headers: <h1>Large</h1>, <h2>Medium</h2>, <h3>Small</h3>
+    - Lists: <ul><li>Item 1</li><li>Item 2</li></ul>
+    - Numbered: <ol><li>Item 1</li><li>Item 2</li></ol>
+    - Links: <a href="url">link text</a>
+    - Colors: <span style="color: red;">red text</span>
+    """
+    
+    # Template variables help
+    VARIABLES_HELP = """
+    Available Variables:
+    - $name - Recipient name
+    - $email - Recipient email
+    - $company - Recipient company
+    - Custom variables can be added in API calls
+    """
+    
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -19,6 +50,55 @@ class EmailTemplate(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+
+
+class EmailAttachment(models.Model):
+    """Model for storing email attachments"""
+    name = models.CharField(max_length=255)
+    file = models.FileField(upload_to='email_attachments/%Y/%m/%d/')
+    content_type = models.CharField(max_length=100, blank=True)
+    file_size = models.BigIntegerField(blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        if self.file:
+            self.file_size = self.file.size
+            self.name = self.name or self.file.name
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_file_size_display()})"
+    
+    def get_file_size_display(self):
+        """Human readable file size"""
+        if not self.file_size:
+            return "Unknown size"
+        
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if self.file_size < 1024.0:
+                return f"{self.file_size:.1f} {unit}"
+            self.file_size /= 1024.0
+        return f"{self.file_size:.1f} TB"
+    
+    def get_absolute_path(self):
+        """Get absolute file path for email attachment"""
+        if self.file and default_storage.exists(self.file.name):
+            return default_storage.path(self.file.name)
+        return None
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
+class TemplateAttachment(models.Model):
+    """Many-to-many relationship between templates and attachments"""
+    template = models.ForeignKey(EmailTemplate, on_delete=models.CASCADE, related_name='attachments')
+    attachment = models.ForeignKey(EmailAttachment, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('template', 'attachment')
 
 
 class Recipient(models.Model):

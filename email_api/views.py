@@ -13,11 +13,12 @@ import json
 import re
 from string import Template
 
-from .models import EmailTemplate, Recipient, EmailCampaign, EmailLog, EmailConfiguration
+from .models import EmailTemplate, Recipient, EmailCampaign, EmailLog, EmailConfiguration, EmailAttachment
 from .serializers import (
     EmailTemplateSerializer, RecipientSerializer, EmailCampaignSerializer,
     EmailLogSerializer, EmailConfigurationSerializer, SingleEmailSerializer,
-    BulkEmailSerializer, EmailStatsSerializer, TemplateVariablesSerializer
+    BulkEmailSerializer, EmailStatsSerializer, TemplateVariablesSerializer,
+    EmailAttachmentSerializer
 )
 from .email_service import EmailSender, EmailData, get_email_sender
 
@@ -180,9 +181,26 @@ class EmailConfigurationViewSet(viewsets.ModelViewSet):
             )
 
 
+class EmailAttachmentViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing email attachments"""
+    queryset = EmailAttachment.objects.all()
+    serializer_class = EmailAttachmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def get_queryset(self):
+        queryset = EmailAttachment.objects.all()
+        template_id = self.request.query_params.get('template', None)
+        if template_id:
+            queryset = queryset.filter(templates__id=template_id)
+        return queryset
+
+
 class SendSingleEmailView(APIView):
     """API view for sending a single email"""
-    permission_classes = [AllowAny]  # Change to IsAuthenticated in production
+    permission_classes = [IsAuthenticated]
     
     @swagger_auto_schema(
         request_body=SingleEmailSerializer,
@@ -222,7 +240,8 @@ class SendSingleEmailView(APIView):
                     subject=data['subject'],
                     body=data['body'],
                     is_html=data.get('is_html', False),
-                    attachments=data.get('attachments', [])
+                    attachments=data.get('attachments', []),
+                    attachment_ids=data.get('attachment_ids', [])
                 )
                 
                 sender = get_email_sender()
@@ -251,7 +270,7 @@ class SendSingleEmailView(APIView):
 
 class SendBulkEmailView(APIView):
     """API view for sending bulk emails"""
-    permission_classes = [AllowAny]  # Change to IsAuthenticated in production
+    permission_classes = [AllowAny]  # Open for development
     
     @swagger_auto_schema(
         request_body=BulkEmailSerializer,
@@ -304,7 +323,8 @@ class SendBulkEmailView(APIView):
                         to_name=recipient.get('name', ''),
                         subject=rendered_subject,
                         body=rendered_body,
-                        is_html=data.get('is_html', False)
+                        is_html=data.get('is_html', False),
+                        attachment_ids=data.get('attachment_ids', [])
                     )
                     emails_to_send.append(email_data)
                 
@@ -340,7 +360,7 @@ class SendBulkEmailView(APIView):
 
 class EmailStatsView(APIView):
     """API view for email statistics"""
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     
     @swagger_auto_schema(
         responses={200: EmailStatsSerializer}
@@ -373,7 +393,7 @@ class EmailStatsView(APIView):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def health_check(request):
     """Health check endpoint"""
     return Response({

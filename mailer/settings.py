@@ -24,9 +24,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-oo%dps(!k27sy$tbqwu9+5bp20i!r_s69rkgxse^h%wkuy2wd1'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = True  # Set to False in production
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.herokuapp.com']
 
 
 # Application definition
@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_yasg',
     'corsheaders',
+    'django_ckeditor_5',
     'email_api',
 ]
 
@@ -141,6 +142,8 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
+    'PAGE_SIZE': 20,
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
 }
 
 # Swagger Settings
@@ -152,11 +155,27 @@ SWAGGER_SETTINGS = {
     },
 }
 
-# CORS Settings
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+# CORS Settings - More restrictive for production
+CORS_ALLOW_ALL_ORIGINS = True  # Set to False in production
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    # Add your production frontend URLs here
+]
+
+# Additional CORS security settings
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_HEADERS = False
+CORS_ALLOWED_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
 ]
 
 # Email Configuration
@@ -167,3 +186,58 @@ EMAIL_CONFIG = {
     'EMAIL_PASSWORD': os.getenv('EMAIL_PASSWORD', ''),
     'USE_TLS': os.getenv('USE_TLS', 'True').lower() == 'true',
 }
+
+# CKEditor 5 Configuration (Secure latest version)
+CKEDITOR_5_CONFIGS = {
+    'default': {
+        'toolbar': ['heading', '|', 'bold', 'italic', 'link',
+                    'bulletedList', 'numberedList', 'blockQuote'],
+        'height': 300,
+    },
+    'email_template': {
+        'toolbar': [
+            'heading', '|',
+            'bold', 'italic', 'underline', 'strikethrough', '|',
+            'link', 'unlink', '|',
+            'bulletedList', 'numberedList', 'outdent', 'indent', '|',
+            'alignment:left', 'alignment:center', 'alignment:right', '|',
+            'fontColor', 'fontSize', '|',
+            'insertTable', 'horizontalLine', '|',
+            'removeFormat', 'sourceEditing', '|',
+            'undo', 'redo'
+        ],
+        'heading': {
+            'options': [
+                {'model': 'paragraph', 'title': 'Paragraph', 'class': 'ck-heading_paragraph'},
+                {'model': 'heading1', 'view': 'h1', 'title': 'Heading 1', 'class': 'ck-heading_heading1'},
+                {'model': 'heading2', 'view': 'h2', 'title': 'Heading 2', 'class': 'ck-heading_heading2'},
+                {'model': 'heading3', 'view': 'h3', 'title': 'Heading 3', 'class': 'ck-heading_heading3'},
+            ]
+        },
+        'height': 400,
+        'removePlugins': ['MediaEmbed', 'EasyImage', 'CKFinder'],
+        'htmlSupport': {
+            'allow': [
+                {'name': 'a', 'attributes': {'href': True, 'target': '_blank'}},
+                {'name': 'img', 'attributes': {'src': True, 'alt': True, 'width': True, 'height': True}},
+                {'name': 'span', 'styles': {'color': True, 'background-color': True}},
+                {'name': 'p', 'styles': {'text-align': True}},
+                {'name': 'h1', 'styles': {'text-align': True}},
+                {'name': 'h2', 'styles': {'text-align': True}},
+                {'name': 'h3', 'styles': {'text-align': True}},
+            ],
+            'disallow': [
+                {'name': 'script'},
+                {'name': 'iframe'},
+                {'name': 'object'},
+                {'name': 'embed'},
+                {'name': 'form'},
+                {'name': 'input'},
+            ]
+        }
+    }
+}
+
+# CKEditor 5 Upload settings
+CKEDITOR_5_UPLOAD_PATH = "uploads/"
+CKEDITOR_5_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"

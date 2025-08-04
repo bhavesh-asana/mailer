@@ -36,17 +36,20 @@ class EmailConfig:
 
 @dataclass
 class EmailData:
-    """Email data structure"""
+    """Email data structure with attachment support"""
     to_email: str
     to_name: str = ""
     subject: str = ""
     body: str = ""
     is_html: bool = False
-    attachments: List[str] = None
+    attachments: List[str] = None  # File paths
+    attachment_ids: List[int] = None  # Database attachment IDs
 
     def __post_init__(self):
         if self.attachments is None:
             self.attachments = []
+        if self.attachment_ids is None:
+            self.attachment_ids = []
 
 
 class EmailSender:
@@ -102,34 +105,65 @@ class EmailSender:
             logger.error(f"Failed to connect to SMTP server: {e}")
             raise
     
-    def _attach_files(self, msg: MIMEMultipart, file_paths: List[str]) -> None:
-        """Attach files to email message"""
-        if not file_paths:
-            return
-            
-        for file_path in file_paths:
-            file_path = Path(file_path)
-            if not file_path.exists():
-                logger.warning(f"Attachment file not found: {file_path}")
-                continue
-                
-            try:
-                with open(file_path, "rb") as attachment:
-                    part = MIMEBase('application', 'octet-stream')
-                    part.set_payload(attachment.read())
+    def _attach_files(self, msg: MIMEMultipart, file_paths: List[str], attachment_ids: List[int] = None) -> List[str]:
+        """Attach files to email message from file paths and/or attachment IDs"""
+        attached_files = []
+        
+        # Handle file paths
+        if file_paths:
+            for file_path in file_paths:
+                file_path = Path(file_path)
+                if not file_path.exists():
+                    logger.warning(f"Attachment file not found: {file_path}")
+                    continue
                     
-                encoders.encode_base64(part)
-                part.add_header(
-                    'Content-Disposition',
-                    f'attachment; filename= {file_path.name}'
-                )
-                msg.attach(part)
-                logger.info(f"Attached file: {file_path.name}")
-                
-            except Exception as e:
-                logger.error(f"Failed to attach file {file_path}: {e}")
+                try:
+                    with open(file_path, "rb") as attachment:
+                        part = MIMEBase('application', 'octet-stream')
+                        part.set_payload(attachment.read())
+                        
+                    encoders.encode_base64(part)
+                    part.add_header(
+                        'Content-Disposition',
+                        f'attachment; filename= {file_path.name}'
+                    )
+                    msg.attach(part)
+                    attached_files.append(str(file_path))
+                    logger.info(f"Attached file: {file_path.name}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to attach file {file_path}: {e}")
+        
+        # Handle attachment IDs from database
+        if attachment_ids:
+            from .models import EmailAttachment
+            for attachment_id in attachment_ids:
+                try:
+                    email_attachment = EmailAttachment.objects.get(id=attachment_id)
+                    file_path = email_attachment.get_absolute_path()
+                    
+                    if file_path and Path(file_path).exists():
+                        with open(file_path, "rb") as attachment:
+                            part = MIMEBase('application', 'octet-stream')
+                            part.set_payload(attachment.read())
+                            
+                        encoders.encode_base64(part)
+                        part.add_header(
+                            'Content-Disposition',
+                            f'attachment; filename= {email_attachment.name}'
+                        )
+                        msg.attach(part)
+                        attached_files.append(email_attachment.name)
+                        logger.info(f"Attached file from DB: {email_attachment.name}")
+                    else:
+                        logger.warning(f"Attachment file not found for ID {attachment_id}")
+                        
+                except Exception as e:
+                    logger.error(f"Failed to attach file from DB ID {attachment_id}: {e}")
+        
+        return attached_files
     
-    def _create_message(self, email_data: EmailData) -> MIMEMultipart:
+    def _create_message(self, email_data: EmailData) -> tuple[MIMEMultipart, List[str]]:
         """Create email message with attachments"""
         msg = MIMEMultipart()
         
@@ -139,14 +173,14 @@ class EmailSender:
         
         # Add body
         if email_data.is_html:
-            msg.attach(MIMEText(email_data.body, 'html'))
+            msg.attach(MIMEText(email_data.body, 'html', 'utf-8'))
         else:
-            msg.attach(MIMEText(email_data.body, 'plain'))
+            msg.attach(MIMEText(email_data.body, 'plain', 'utf-8'))
         
-        # Add attachments
-        self._attach_files(msg, email_data.attachments)
+        # Add attachments and get list of attached files
+        attached_files = self._attach_files(msg, email_data.attachments, email_data.attachment_ids)
         
-        return msg
+        return msg, attached_files
     
     def send_single_email(self, email_data: EmailData, campaign_id: int = None) -> bool:
         """Send a single email and log to database"""
@@ -157,20 +191,21 @@ class EmailSender:
             subject=email_data.subject,
             body=email_data.body,
             is_html=email_data.is_html,
-            attachments=email_data.attachments,
+            attachments=email_data.attachments + [f"ID:{aid}" for aid in email_data.attachment_ids],
             status='pending'
         )
         
         try:
-            msg = self._create_message(email_data)
+            msg, attached_files = self._create_message(email_data)
             
             with self._create_smtp_connection() as server:
                 text = msg.as_string()
                 server.sendmail(self.config.username, email_data.to_email, text)
             
-            # Update log on success
+            # Update log on success with actual attached files
             email_log.status = 'sent'
             email_log.sent_at = timezone.now()
+            email_log.attachments = attached_files
             email_log.save()
             
             self.sent_count += 1
