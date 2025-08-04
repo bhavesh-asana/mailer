@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '.github/workflows/**'  # Ignore workflow changes to prevent infinite loops
+      - 'README.md'
+      - '*.md'
 
 jobs:
   tag-release:
@@ -15,57 +19,147 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
 
-      - name: Fetch tags
-        run: git fetch --tags
+      - name: Check for meaningful changes
+        id: check_changes
+        run: |
+          # Check if this is just a version tag commit
+          commit_msg="${{ github.event.head_commit.message }}"
+          if [[ "$commit_msg" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+|Release|Tag) ]]; then
+            echo "This appears to be a version/release commit, skipping auto-tag"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "This is a regular commit, proceeding with auto-tag"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fetch all tags
+        if: steps.check_changes.outputs.skip != 'true'
+        run: |
+          git fetch --all --tags --force
+          echo "All tags:"
+          git tag -l --sort=-version:refname
 
       - name: Get latest tag
+        if: steps.check_changes.outputs.skip != 'true'
         id: get_tag
         run: |
-          tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
-          echo "Latest tag: $tag"
-          echo "tag=$tag" >> $GITHUB_OUTPUT
+          # Get the latest tag, sorted by version
+          latest_tag=$(git tag -l --sort=-version:refname | head -n1)
+          
+          # If no tags exist, start with v1.0.0
+          if [ -z "$latest_tag" ]; then
+            latest_tag="v1.0.0"
+            echo "No existing tags found, starting with v1.0.0"
+          else
+            echo "Found latest tag: $latest_tag"
+          fi
+          
+          echo "tag=$latest_tag" >> $GITHUB_OUTPUT
+          echo "Latest tag set to: $latest_tag"
 
       - name: Bump version
+        if: steps.check_changes.outputs.skip != 'true'
         id: bump_version
         run: |
           OLD_TAG=${{ steps.get_tag.outputs.tag }}
+          echo "Processing tag: $OLD_TAG"
+          
+          # Remove 'v' prefix if it exists
           OLD_VERSION=${OLD_TAG#v}
+          echo "Version without 'v': $OLD_VERSION"
+          
+          # Parse version components
           IFS='.' read -r MAJOR MINOR PATCH <<< "$OLD_VERSION"
+          echo "Current version: MAJOR=$MAJOR, MINOR=$MINOR, PATCH=$PATCH"
+          
+          # Increment patch version
           PATCH=$((PATCH + 1))
           NEW_TAG="v$MAJOR.$MINOR.$PATCH"
-          echo "New tag: $NEW_TAG"
+          
+          echo "New tag will be: $NEW_TAG"
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
-      - name: Create new Git tag
+      - name: Check if tag already exists
+        if: steps.check_changes.outputs.skip != 'true'
+        id: check_tag
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag ${{ steps.bump_version.outputs.new_tag }}
-          git push origin ${{ steps.bump_version.outputs.new_tag }}
+          NEW_TAG=${{ steps.bump_version.outputs.new_tag }}
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "Tag $NEW_TAG already exists!"
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+            
+            # Force increment if tag exists
+            OLD_TAG=${{ steps.get_tag.outputs.tag }}
+            OLD_VERSION=${OLD_TAG#v}
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$OLD_VERSION"
+            PATCH=$((PATCH + 2))  # Skip one more version
+            FORCE_NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+            echo "Forcing new tag: $FORCE_NEW_TAG"
+            echo "force_new_tag=$FORCE_NEW_TAG" >> $GITHUB_OUTPUT
+          else
+            echo "Tag $NEW_TAG is available"
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create new Git tag
+        if: steps.check_changes.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if [ "${{ steps.check_tag.outputs.tag_exists }}" = "true" ]; then
+            FINAL_TAG=${{ steps.check_tag.outputs.force_new_tag }}
+          else
+            FINAL_TAG=${{ steps.bump_version.outputs.new_tag }}
+          fi
+          
+          echo "Creating tag: $FINAL_TAG"
+          git tag "$FINAL_TAG"
+          git push origin "$FINAL_TAG"
+          
+          # Update the output for the release step
+          echo "final_tag=$FINAL_TAG" >> $GITHUB_OUTPUT
+        id: create_tag
 
       - name: Create GitHub Release
+        if: steps.check_changes.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.bump_version.outputs.new_tag }}
-          name: Release ${{ steps.bump_version.outputs.new_tag }}
+          tag_name: ${{ steps.create_tag.outputs.final_tag }}
+          name: Release ${{ steps.create_tag.outputs.final_tag }}
+          body: |
+            ## 🚀 Release ${{ steps.create_tag.outputs.final_tag }}
+            
+            **What's Changed:**
+            - Automated release from commit: ${{ github.sha }}
+            - Latest changes pushed to main branch
+            
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.get_tag.outputs.tag }}...${{ steps.create_tag.outputs.final_tag }}
       
       - name: Send release email
+        if: steps.check_changes.outputs.skip != 'true'
+        continue-on-error: true  # Don't fail the workflow if email fails
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "🚀 New Release: ${{ steps.bump_version.outputs.new_tag }}"
+          subject: "🚀 New Release: ${{ steps.create_tag.outputs.final_tag }}"
           to: ${{ secrets.EMAIL_TO }}
           from: ${{ secrets.EMAIL_FROM }}
           content_type: text/plain
           body: |
             A new release has been published!
 
-            🔖 Tag: ${{ steps.bump_version.outputs.new_tag }}
+            🔖 Tag: ${{ steps.create_tag.outputs.final_tag }}
             📦 Repo: ${{ github.repository }}
             📄 Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
-            🔗 Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.bump_version.outputs.new_tag }}
+            🔗 Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.create_tag.outputs.final_tag }}
+            
+            Previous version: ${{ steps.get_tag.outputs.tag }}
+            New version: ${{ steps.create_tag.outputs.final_tag }}
 
