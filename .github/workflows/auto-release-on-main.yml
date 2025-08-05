@@ -1,4 +1,4 @@
-name: Auto Tag & Release
+name: Main Branch Release
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
       - '*.md'
 
 jobs:
-  tag-release:
+  main-release:
     runs-on: ubuntu-latest
 
     permissions:
@@ -46,8 +46,8 @@ jobs:
         if: steps.check_changes.outputs.skip != 'true'
         id: get_tag
         run: |
-          # Get the latest tag, sorted by version
-          latest_tag=$(git tag -l --sort=-version:refname | head -n1)
+          # Get the latest stable release tag from main branch
+          latest_tag=$(git tag -l --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
           
           # If no tags exist, start with v1.0.0
           if [ -z "$latest_tag" ]; then
@@ -75,7 +75,7 @@ jobs:
           IFS='.' read -r MAJOR MINOR PATCH <<< "$OLD_VERSION"
           echo "Current version: MAJOR=$MAJOR, MINOR=$MINOR, PATCH=$PATCH"
           
-          # Increment patch version
+          # Increment patch version for main branch
           PATCH=$((PATCH + 1))
           NEW_TAG="v$MAJOR.$MINOR.$PATCH"
           
@@ -130,8 +130,14 @@ jobs:
         with:
           tag_name: ${{ steps.create_tag.outputs.final_tag }}
           name: Release ${{ steps.create_tag.outputs.final_tag }}
+          prerelease: false
           body: |
             ## 🚀 Release ${{ steps.create_tag.outputs.final_tag }}
+            
+            **Branch Information:**
+            - 🌿 Branch: `main`
+            - 📂 Branch Type: `stable`
+            - 🏷️ Version Type: `release`
             
             **What's Changed:**
             - Automated release from commit: ${{ github.sha }}
@@ -139,11 +145,6 @@ jobs:
             
             **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.get_tag.outputs.tag }}...${{ steps.create_tag.outputs.final_tag }}
       
-      - name: Get current date
-        if: steps.check_changes.outputs.skip != 'true'
-        id: date
-        run: echo "date=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
-
       - name: Send release email
         if: steps.check_changes.outputs.skip != 'true'
         continue-on-error: true  # Don't fail the workflow if email fails
@@ -153,63 +154,45 @@ jobs:
           server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "🚀 New Release: Mailer Application"
+          subject: "🚀 New Release: Mailer Application - ${{ steps.create_tag.outputs.final_tag }}"
           to: ${{ secrets.EMAIL_TO }}
           from: ${{ secrets.EMAIL_FROM }}
-          content_type: text/plain
           body: |
-            🚀 A new release of the Mailer Application has been published!
-
-            ═══════════════════════════════════════════════════════════════
-            � RELEASE INFORMATION
-            ═══════════════════════════════════════════════════════════════
-            �🔖 Tag: ${{ steps.create_tag.outputs.final_tag }}
+            🚀 NEW RELEASE AVAILABLE: ${{ steps.create_tag.outputs.final_tag }}
+            
             📦 Repository: ${{ github.repository }}
-            📅 Release Date: ${{ github.event.head_commit.timestamp }}
-            🏷️ Branch: ${{ github.ref_name }}
+            🏷️ Branch: main (stable release)
+            📅 Released: ${{ github.event.head_commit.timestamp }}
             
-            ═══════════════════════════════════════════════════════════════
-            📊 VERSION DETAILS
-            ═══════════════════════════════════════════════════════════════
-            📈 Previous Version: ${{ steps.get_tag.outputs.tag }}
-            ✨ New Version: ${{ steps.create_tag.outputs.final_tag }}
-            📄 Commit SHA: ${{ github.sha }}
-            👤 Author: ${{ github.event.head_commit.author.name }} <${{ github.event.head_commit.author.email }}>
-            💬 Commit Message: "${{ github.event.head_commit.message }}"
+            VERSION DETAILS:
+            • Previous: ${{ steps.get_tag.outputs.tag }}
+            • Current: ${{ steps.create_tag.outputs.final_tag }}
+            • Commit: ${{ github.sha }}
+            • Author: ${{ github.event.head_commit.author.name }}
             
-            ═══════════════════════════════════════════════════════════════
-            🔗 QUICK LINKS
-            ═══════════════════════════════════════════════════════════════
-            🌐 View Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.create_tag.outputs.final_tag }}
-            📄 View Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
-            � Full Changelog: https://github.com/${{ github.repository }}/compare/${{ steps.get_tag.outputs.tag }}...${{ steps.create_tag.outputs.final_tag }}
+            COMMIT MESSAGE:
+            "${{ github.event.head_commit.message }}"
+            
+            QUICK LINKS:
+            🌐 Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.create_tag.outputs.final_tag }}
+            📄 Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+            🔄 Changelog: https://github.com/${{ github.repository }}/compare/${{ steps.get_tag.outputs.tag }}...${{ steps.create_tag.outputs.final_tag }}
             🏠 Repository: https://github.com/${{ github.repository }}
-            📚 Wiki Documentation: https://github.com/${{ github.repository }}.wiki
+            📚 Wiki: https://github.com/${{ github.repository }}.wiki
             
-            ═══════════════════════════════════════════════════════════════
-            🚀 QUICK START
-            ═══════════════════════════════════════════════════════════════
-            Clone the latest version:
+            QUICK START:
             git clone https://github.com/${{ github.repository }}.git
-            cd mailer
-            git checkout ${{ steps.create_tag.outputs.final_tag }}
+            cd mailer && git checkout ${{ steps.create_tag.outputs.final_tag }}
             
-            Or download the release directly:
-            wget https://github.com/${{ github.repository }}/archive/refs/tags/${{ steps.create_tag.outputs.final_tag }}.zip
+            Or download: https://github.com/${{ github.repository }}/archive/refs/tags/${{ steps.create_tag.outputs.final_tag }}.zip
             
-            ═══════════════════════════════════════════════════════════════
-            📧 MAILER APPLICATION FEATURES
-            ═══════════════════════════════════════════════════════════════
-            🎨 Rich Email Templates with Placeholders
-            📋 Bulk Email Campaigns with CSV/Excel Import
-            🔐 Multiple Email Provider Support (Gmail, Outlook, Yahoo)
-            📊 Campaign Tracking and Statistics
-            📎 File Attachment Support
-            🛡️ Secure Authentication and API Access
-            📖 Comprehensive Documentation and Wiki
+            FEATURES:
+            • Rich Email Templates with Placeholders
+            • Bulk Email Campaigns with CSV/Excel Import  
+            • Multiple Email Provider Support
+            • Campaign Tracking and Statistics
+            • File Attachment Support
+            • Secure Authentication and API Access
             
             This release was automatically generated by GitHub Actions.
-            For support or questions, please visit the repository or check the wiki documentation.
-            
             Happy coding! 🎉
-

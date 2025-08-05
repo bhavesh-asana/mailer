@@ -1,0 +1,520 @@
+name: Branch Release Automation
+
+on:
+  push:
+    branches:
+      - 'develop'
+      - 'feature/**'
+      - 'hotfix/**'
+      - 'release/**'
+      - 'bugfix/**'
+      # Jira ticket patterns (common formats)
+      - '[A-Z]+-[0-9]+-*'        # ABC-123-description
+      - '[A-Z]+[0-9]+-*'         # ABC123-description  
+      - '*-[A-Z]+-[0-9]+'        # prefix-ABC-123
+      - '*-[A-Z]+[0-9]+'         # prefix-ABC123
+      # Catch-all for any branch that's not main
+      - '!main'
+    paths-ignore:
+      - '.github/workflows/**'
+      - 'README.md'
+      - '*.md'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - '.github/workflows/**'
+      - 'README.md'
+      - '*.md'
+
+jobs:
+  branch-release:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write # Needed to push tags and create releases
+      pull-requests: write  # Needed to create PRs for branch releases
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine branch context
+        id: context
+        run: |
+          # Determine if this is a PR or push event
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BRANCH_NAME="${{ github.head_ref }}"
+            IS_PR=true
+            PR_NUMBER="${{ github.event.number }}"
+            echo "PR event detected: #$PR_NUMBER from branch $BRANCH_NAME"
+          else
+            BRANCH_NAME="${{ github.ref_name }}"
+            IS_PR=false
+            PR_NUMBER=""
+            echo "Push event detected on branch: $BRANCH_NAME"
+          fi
+          
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "is_pr=$IS_PR" >> $GITHUB_OUTPUT
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          
+          # Enhanced branch type detection including Jira patterns
+          determine_branch_type() {
+            local branch="$1"
+            echo "Analyzing branch: $branch"
+            
+            # Check for standard patterns first
+            case "$branch" in
+              develop)
+                echo "develop|beta"
+                return
+                ;;
+              release/*)
+                echo "release|rc"
+                return
+                ;;
+              hotfix/*)
+                echo "hotfix|hotfix"
+                return
+                ;;
+              feature/*)
+                echo "feature|alpha"
+                return
+                ;;
+              bugfix/*)
+                echo "bugfix|alpha"
+                return
+                ;;
+            esac
+            
+            # Check for Jira ticket patterns and infer type from keywords
+            if [[ "$branch" =~ ^[A-Z]+-[0-9]+(-.*)?$ ]] || [[ "$branch" =~ ^[A-Z]+[0-9]+(-.*)?$ ]]; then
+              echo "Detected Jira ticket pattern: $branch"
+              
+              # Extract the description part after the ticket number
+              local description=""
+              if [[ "$branch" =~ ^[A-Z]+-[0-9]+-(.*)$ ]]; then
+                description="${BASH_REMATCH[1]}"
+              elif [[ "$branch" =~ ^[A-Z]+[0-9]+-(.*)$ ]]; then
+                description="${BASH_REMATCH[1]}"
+              fi
+              
+              echo "Description extracted: '$description'"
+              
+              # Categorize based on keywords in description
+              if [[ "$description" =~ (hotfix|urgent|critical|emergency|patch) ]]; then
+                echo "jira-hotfix|hotfix"
+              elif [[ "$description" =~ (feature|feat|new|add|implement|enhancement) ]]; then
+                echo "jira-feature|alpha"
+              elif [[ "$description" =~ (bug|fix|repair|resolve|issue) ]]; then
+                echo "jira-bugfix|alpha"
+              elif [[ "$description" =~ (release|rel|version|v[0-9]) ]]; then
+                echo "jira-release|rc"
+              elif [[ "$description" =~ (refactor|refact|cleanup|improve|optimize) ]]; then
+                echo "jira-refactor|alpha"
+              elif [[ "$description" =~ (test|testing|spec|e2e|unit) ]]; then
+                echo "jira-test|alpha"
+              elif [[ "$description" =~ (doc|docs|documentation|readme) ]]; then
+                echo "jira-docs|alpha"
+              else
+                echo "jira-general|alpha"
+              fi
+              return
+            fi
+            
+            # Check for other Jira patterns
+            if [[ "$branch" =~ [A-Z]+-[0-9]+ ]] || [[ "$branch" =~ [A-Z]+[0-9]+ ]]; then
+              echo "jira-general|alpha"
+              return
+            fi
+            
+          }
+          
+          RESULT=$(determine_branch_type "$BRANCH_NAME")
+          BRANCH_TYPE=$(echo "$RESULT" | cut -d'|' -f1)
+          VERSION_TYPE=$(echo "$RESULT" | cut -d'|' -f2)
+          
+          echo "branch_type=$BRANCH_TYPE" >> $GITHUB_OUTPUT
+          echo "version_type=$VERSION_TYPE" >> $GITHUB_OUTPUT
+          echo "Branch type determined: $BRANCH_TYPE, Version type: $VERSION_TYPE"
+          
+          # Extract Jira ticket if present
+          if [[ "$BRANCH_NAME" =~ ([A-Z]+-[0-9]+) ]] || [[ "$BRANCH_NAME" =~ ([A-Z]+[0-9]+) ]]; then
+            JIRA_TICKET="${BASH_REMATCH[1]}"
+            echo "jira_ticket=$JIRA_TICKET" >> $GITHUB_OUTPUT
+            echo "Jira ticket extracted: $JIRA_TICKET"
+          fi
+          
+          # Handle release version extraction
+          if [[ "$BRANCH_TYPE" == "release" || "$BRANCH_TYPE" == "jira-release" ]]; then
+            if [[ "$BRANCH_NAME" =~ release/(.+) ]]; then
+              RELEASE_VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$BRANCH_NAME" =~ v?([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+              RELEASE_VERSION="${BASH_REMATCH[1]}"
+            fi
+            if [ -n "$RELEASE_VERSION" ]; then
+              echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+              echo "Release version extracted: $RELEASE_VERSION"
+            fi
+          fi
+
+      - name: Check for meaningful changes
+        id: check_changes
+        run: |
+          commit_msg="${{ github.event.head_commit.message }}"
+          if [[ "$commit_msg" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+|Release|Tag|Merge) ]]; then
+            echo "This appears to be a version/release/merge commit, skipping auto-tag"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "This is a regular commit, proceeding with auto-tag"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fetch all tags
+        if: steps.check_changes.outputs.skip != 'true'
+        run: |
+          git fetch --all --tags --force
+          echo "All existing tags:"
+          git tag -l --sort=-version:refname | head -10
+
+      - name: Get base version
+        if: steps.check_changes.outputs.skip != 'true'
+        id: get_base_version
+        run: |
+          # Get the latest stable release as base
+          latest_stable=$(git tag -l --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          
+          # If no stable tags exist, start with v0.1.0
+          if [ -z "$latest_stable" ]; then
+            BASE_VERSION="0.1.0"
+            echo "No existing stable tags found, using base version v0.1.0"
+          else
+            BASE_VERSION=$(echo "$latest_stable" | sed 's/^v//')
+            echo "Found latest stable tag: $latest_stable, using as base"
+          fi
+          
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+          echo "base_tag=v$BASE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate pre-release version
+        if: steps.check_changes.outputs.skip != 'true'
+        id: generate_version
+        run: |
+          BASE_VERSION="${{ steps.get_base_version.outputs.base_version }}"
+          BRANCH_TYPE="${{ steps.context.outputs.branch_type }}"
+          VERSION_TYPE="${{ steps.context.outputs.version_type }}"
+          BRANCH_NAME="${{ steps.context.outputs.branch_name }}"
+          IS_PR="${{ steps.context.outputs.is_pr }}"
+          PR_NUMBER="${{ steps.context.outputs.pr_number }}"
+          JIRA_TICKET="${{ steps.context.outputs.jira_ticket }}"
+          
+          echo "Base version: $BASE_VERSION"
+          echo "Branch type: $BRANCH_TYPE, Version type: $VERSION_TYPE"
+          echo "Jira ticket: $JIRA_TICKET"
+          
+          # Parse base version components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+          
+          # Generate timestamp and short SHA for uniqueness
+          TIMESTAMP=$(date +%Y%m%d)
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          
+          # Generate clean identifier for version
+          generate_clean_identifier() {
+            local input="$1"
+            # Remove common prefixes and suffixes, clean special chars
+            echo "$input" | sed 's|.*/||' | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]' | sed 's/--*/-/g' | sed 's/^-\|-$//g'
+          }
+          
+          # Determine version strategy based on branch type
+          case "$BRANCH_TYPE" in
+            develop)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              NEW_VERSION="v$MAJOR.$MINOR.$PATCH-beta.${TIMESTAMP}.${SHORT_SHA}"
+              ;;
+            release)
+              if [ -n "${{ steps.context.outputs.release_version }}" ]; then
+                RELEASE_VER="${{ steps.context.outputs.release_version }}"
+                RC_COUNT=$(git tag -l --sort=-version:refname | grep -c "^v${RELEASE_VER}-rc" || echo "0")
+                RC_COUNT=$((RC_COUNT + 1))
+                NEW_VERSION="v${RELEASE_VER}-rc.${RC_COUNT}"
+              else
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                NEW_VERSION="v$MAJOR.$MINOR.$PATCH-rc.1"
+              fi
+              ;;
+            hotfix)
+              PATCH=$((PATCH + 1))
+              NEW_VERSION="v$MAJOR.$MINOR.$PATCH-hotfix.${TIMESTAMP}.${SHORT_SHA}"
+              ;;
+            feature|bugfix)
+              PATCH=$((PATCH + 1))
+              CLEAN_BRANCH=$(generate_clean_identifier "$BRANCH_NAME")
+              NEW_VERSION="v$MAJOR.$MINOR.$PATCH-alpha.${CLEAN_BRANCH}.${SHORT_SHA}"
+              ;;
+            jira-hotfix)
+              PATCH=$((PATCH + 1))
+              if [ -n "$JIRA_TICKET" ]; then
+                NEW_VERSION="v$MAJOR.$MINOR.$PATCH-hotfix.${JIRA_TICKET}.${SHORT_SHA}"
+              else
+                CLEAN_BRANCH=$(generate_clean_identifier "$BRANCH_NAME")
+                NEW_VERSION="v$MAJOR.$MINOR.$PATCH-hotfix.${CLEAN_BRANCH}.${SHORT_SHA}"
+              fi
+              ;;
+            jira-feature)
+              PATCH=$((PATCH + 1))
+              if [ -n "$JIRA_TICKET" ]; then
+                NEW_VERSION="v$MAJOR.$MINOR.$PATCH-alpha.${JIRA_TICKET}.${SHORT_SHA}"
+              else
+                CLEAN_BRANCH=$(generate_clean_identifier "$BRANCH_NAME")
+                NEW_VERSION="v$MAJOR.$MINOR.$PATCH-alpha.${CLEAN_BRANCH}.${SHORT_SHA}"
+              fi
+              ;;
+            jira-bugfix)
+              PATCH=$((PATCH + 1))
+              if [ -n "$JIRA_TICKET" ]; then
+                NEW_VERSION="v$MAJOR.$MINOR.$PATCH-bugfix.${JIRA_TICKET}.${SHORT_SHA}"
+              else
+                CLEAN_BRANCH=$(generate_clean_identifier "$BRANCH_NAME")
+                NEW_VERSION="v$MAJOR.$MINOR.$PATCH-bugfix.${CLEAN_BRANCH}.${SHORT_SHA}"
+              fi
+              ;;
+            jira-release)
+              if [ -n "${{ steps.context.outputs.release_version }}" ]; then
+                RELEASE_VER="${{ steps.context.outputs.release_version }}"
+                RC_COUNT=$(git tag -l --sort=-version:refname | grep -c "^v${RELEASE_VER}-rc" || echo "0")
+                RC_COUNT=$((RC_COUNT + 1))
+                NEW_VERSION="v${RELEASE_VER}-rc.${RC_COUNT}"
+              else
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                if [ -n "$JIRA_TICKET" ]; then
+                  NEW_VERSION="v$MAJOR.$MINOR.$PATCH-rc.${JIRA_TICKET}"
+                else
+                  NEW_VERSION="v$MAJOR.$MINOR.$PATCH-rc.1"
+                fi
+              fi
+              ;;
+            jira-*)
+              # Generic Jira ticket handling
+              PATCH=$((PATCH + 1))
+              CATEGORY=$(echo "$BRANCH_TYPE" | sed 's/jira-//')
+              if [ -n "$JIRA_TICKET" ]; then
+                NEW_VERSION="v$MAJOR.$MINOR.$PATCH-${CATEGORY}.${JIRA_TICKET}.${SHORT_SHA}"
+              else
+                CLEAN_BRANCH=$(generate_clean_identifier "$BRANCH_NAME")
+                NEW_VERSION="v$MAJOR.$MINOR.$PATCH-${CATEGORY}.${CLEAN_BRANCH}.${SHORT_SHA}"
+              fi
+              ;;
+            other)
+              # Handle 'other' branch type specifically
+              PATCH=$((PATCH + 1))
+              CLEAN_BRANCH=$(generate_clean_identifier "$BRANCH_NAME")
+              NEW_VERSION="v$MAJOR.$MINOR.$PATCH-dev.${CLEAN_BRANCH}.${SHORT_SHA}"
+              ;;
+            *)
+              # Default fallback for any unhandled branch types
+              PATCH=$((PATCH + 1))
+              CLEAN_BRANCH=$(generate_clean_identifier "$BRANCH_NAME")
+              NEW_VERSION="v$MAJOR.$MINOR.$PATCH-dev.${CLEAN_BRANCH}.${SHORT_SHA}"
+              ;;
+          esac
+          
+          # If this is a PR, add PR identifier
+          if [ "$IS_PR" = "true" ]; then
+            NEW_VERSION="${NEW_VERSION}-pr.${PR_NUMBER}"
+          fi
+          
+          echo "Generated version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if version exists
+        if: steps.check_changes.outputs.skip != 'true'
+        id: check_version
+        run: |
+          NEW_VERSION="${{ steps.generate_version.outputs.new_version }}"
+          
+          if git rev-parse "$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Version $NEW_VERSION already exists, will skip creation"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version $NEW_VERSION is available"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create pre-release tag
+        if: steps.check_changes.outputs.skip != 'true' && steps.check_version.outputs.exists != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          NEW_VERSION="${{ steps.generate_version.outputs.new_version }}"
+          IS_PR="${{ steps.context.outputs.is_pr }}"
+          
+          echo "Creating tag: $NEW_VERSION"
+          git tag "$NEW_VERSION"
+          
+          # For PRs, we create local tags only to avoid cluttering
+          # For branch pushes, we push the tag
+          if [ "$IS_PR" = "false" ]; then
+            echo "Pushing tag to remote"
+            git push origin "$NEW_VERSION"
+          else
+            echo "PR detected - tag created locally only"
+          fi
+        id: create_tag
+
+      - name: Create GitHub Pre-Release
+        if: steps.check_changes.outputs.skip != 'true' && steps.check_version.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.generate_version.outputs.new_version }}
+          name: "🧪 Pre-Release ${{ steps.generate_version.outputs.new_version }}"
+          prerelease: true
+          draft: ${{ steps.context.outputs.is_pr == 'true' }}
+          body: |
+            ## 🧪 Pre-Release ${{ steps.generate_version.outputs.new_version }}
+            
+            **Branch Information:**
+            - 🌿 **Branch**: `${{ steps.context.outputs.branch_name }}`
+            - 📂 **Branch Type**: `${{ steps.context.outputs.branch_type }}`
+            - 🎯 **Version Type**: `${{ steps.context.outputs.version_type }}`
+            ${{ steps.context.outputs.jira_ticket && format('- 🎫 **Jira Ticket**: {0}', steps.context.outputs.jira_ticket) || '' }}
+            ${{ steps.context.outputs.is_pr == 'true' && format('- 🔀 **Pull Request**: #{0}', steps.context.outputs.pr_number) || '' }}
+            
+            **⚠️ Important Notes:**
+            - This is a **PRE-RELEASE** version intended for testing and development
+            - **DO NOT** use this in production environments
+            - This version may contain breaking changes or incomplete features
+            ${{ steps.context.outputs.is_pr == 'true' && '- This is a **DRAFT** release for PR review purposes' || '' }}
+            
+            **What's Changed:**
+            - Pre-release from branch: `${{ steps.context.outputs.branch_name }}`
+            ${{ steps.context.outputs.jira_ticket && format('- Related to Jira ticket: {0}', steps.context.outputs.jira_ticket) || '' }}
+            - Latest commit: ${{ github.sha }}
+            - Based on stable version: ${{ steps.get_base_version.outputs.base_tag }}
+            
+            **Quick Start:**
+            ```bash
+            # Clone and checkout this pre-release
+            git clone https://github.com/${{ github.repository }}.git
+            cd mailer
+            git checkout ${{ steps.generate_version.outputs.new_version }}
+            ```
+            
+            **Testing Instructions:**
+            1. Download and test this pre-release version
+            2. Report any issues in the repository
+            ${{ steps.context.outputs.jira_ticket && format('3. Update Jira ticket {0} with test results', steps.context.outputs.jira_ticket) || '3. Provide feedback for improvements' }}
+            
+            **Links:**
+            - 📄 [View Commit](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+            - 🔄 [Compare Changes](https://github.com/${{ github.repository }}/compare/${{ steps.get_base_version.outputs.base_tag }}...${{ steps.generate_version.outputs.new_version }})
+            - 🏠 [Repository](https://github.com/${{ github.repository }})
+            ${{ steps.context.outputs.is_pr == 'true' && format('- 🔀 [View Pull Request](https://github.com/{0}/pull/{1})', github.repository, steps.context.outputs.pr_number) || '' }}
+
+      - name: Get committer email
+        if: steps.check_changes.outputs.skip != 'true' && steps.check_version.outputs.exists != 'true' && steps.context.outputs.is_pr != 'true'
+        id: committer
+        run: |
+          # Try GitHub event email first
+          COMMIT_EMAIL="${{ github.event.head_commit.author.email }}"
+          
+          # If empty, try git log as fallback
+          if [ -z "$COMMIT_EMAIL" ] || [ "$COMMIT_EMAIL" = "null" ]; then
+            COMMIT_EMAIL=$(git log -1 --pretty=format:'%ae')
+            echo "Used git log fallback for email: $COMMIT_EMAIL"
+          else
+            echo "Used GitHub event email: $COMMIT_EMAIL"
+          fi
+          
+          # Final fallback to a default if still empty
+          if [ -z "$COMMIT_EMAIL" ] || [ "$COMMIT_EMAIL" = "null" ]; then
+            COMMIT_EMAIL="${{ secrets.EMAIL_FROM }}"
+            echo "Used fallback email: $COMMIT_EMAIL"
+          fi
+          
+          echo "commit_email=$COMMIT_EMAIL" >> $GITHUB_OUTPUT
+          echo "Final committer email: $COMMIT_EMAIL"
+
+      - name: Send pre-release notification
+        if: steps.check_changes.outputs.skip != 'true' && steps.check_version.outputs.exists != 'true' && steps.context.outputs.is_pr != 'true'
+        continue-on-error: true
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "🧪 Pre-Release Available: ${{ steps.generate_version.outputs.new_version }} ${{ steps.context.outputs.jira_ticket && format('(Jira: {0})', steps.context.outputs.jira_ticket) || format('from {0}', steps.context.outputs.branch_name) }}"
+          to: ${{ steps.committer.outputs.commit_email }}
+          from: ${{ secrets.EMAIL_FROM }}
+          body: |
+            🧪 NEW PRE-RELEASE AVAILABLE: ${{ steps.generate_version.outputs.new_version }}
+            
+            📦 Repository: ${{ github.repository }}
+            🌿 Branch: ${{ steps.context.outputs.branch_name }}
+            📂 Branch Type: ${{ steps.context.outputs.branch_type }}
+            🎯 Version Type: ${{ steps.context.outputs.version_type }}
+            ${{ steps.context.outputs.jira_ticket && format('🎫 Jira Ticket: {0}', steps.context.outputs.jira_ticket) || '' }}
+            📅 Date: ${{ github.event.head_commit.timestamp }}
+            📄 Commit: ${{ github.sha }}
+            👤 Author: ${{ github.event.head_commit.author.name }}
+            
+            COMMIT MESSAGE:
+            "${{ github.event.head_commit.message }}"
+            
+            ⚠️  WARNING: This is a PRE-RELEASE version!
+            ⚠️  Do NOT use in production environments.
+            ⚠️  Intended for testing and development only.
+            
+            QUICK LINKS:
+            🌐 Pre-Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.generate_version.outputs.new_version }}
+            📄 Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+            🔄 Changes: https://github.com/${{ github.repository }}/compare/${{ steps.get_base_version.outputs.base_tag }}...${{ steps.generate_version.outputs.new_version }}
+            🏠 Repository: https://github.com/${{ github.repository }}
+            
+            TESTING INSTRUCTIONS:
+            1. Download the pre-release version
+            2. Test in a development environment
+            3. Report any issues found
+            ${{ steps.context.outputs.jira_ticket && format('4. Update Jira ticket {0} with test results', steps.context.outputs.jira_ticket) || '4. Provide feedback for improvements' }}
+            
+            Quick clone command:
+            git clone https://github.com/${{ github.repository }}.git && cd mailer && git checkout ${{ steps.generate_version.outputs.new_version }}
+            
+            Happy testing! 🧪
+
+      - name: Comment on PR (if applicable)
+        if: steps.context.outputs.is_pr == 'true' && steps.check_changes.outputs.skip != 'true' && steps.check_version.outputs.exists != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jiraTicket = '${{ steps.context.outputs.jira_ticket }}';
+            const jiraInfo = jiraTicket ? `\n**Jira Ticket**: \`${jiraTicket}\`` : '';
+            
+            github.rest.issues.createComment({
+              issue_number: ${{ steps.context.outputs.pr_number }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🧪 Pre-Release Created
+              
+              A draft pre-release has been created for this PR:
+              
+              **Version**: \`${{ steps.generate_version.outputs.new_version }}\`
+              **Type**: \`${{ steps.context.outputs.version_type }}\` (Draft)
+              **Branch**: \`${{ steps.context.outputs.branch_name }}\`${jiraInfo}
+              
+              🔗 [View Draft Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.generate_version.outputs.new_version }})
+              
+              This draft release will be automatically updated when the PR is updated.
+              
+              ⚠️ **Note**: This is a draft pre-release for testing purposes only.`
+            })
