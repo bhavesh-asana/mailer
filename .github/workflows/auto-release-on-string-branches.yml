@@ -134,7 +134,7 @@ jobs:
             fi
             
             # Default for any other branch
-            echo "other|dev"
+            echo "dev"
           }
           
           RESULT=$(determine_branch_type "$BRANCH_NAME")
