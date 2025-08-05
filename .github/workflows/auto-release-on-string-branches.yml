@@ -316,7 +316,7 @@ jobs:
               fi
               ;;
             *)
-              # Other branches
+              # Other branches (including 'other')
               PATCH=$((PATCH + 1))
               CLEAN_BRANCH=$(generate_clean_identifier "$BRANCH_NAME")
               NEW_VERSION="v$MAJOR.$MINOR.$PATCH-dev.${CLEAN_BRANCH}.${SHORT_SHA}"
@@ -420,9 +420,25 @@ jobs:
         if: steps.check_changes.outputs.skip != 'true' && steps.check_version.outputs.exists != 'true' && steps.context.outputs.is_pr != 'true'
         id: committer
         run: |
+          # Try GitHub event email first
           COMMIT_EMAIL="${{ github.event.head_commit.author.email }}"
+          
+          # If empty, try git log as fallback
+          if [ -z "$COMMIT_EMAIL" ] || [ "$COMMIT_EMAIL" = "null" ]; then
+            COMMIT_EMAIL=$(git log -1 --pretty=format:'%ae')
+            echo "Used git log fallback for email: $COMMIT_EMAIL"
+          else
+            echo "Used GitHub event email: $COMMIT_EMAIL"
+          fi
+          
+          # Final fallback to a default if still empty
+          if [ -z "$COMMIT_EMAIL" ] || [ "$COMMIT_EMAIL" = "null" ]; then
+            COMMIT_EMAIL="${{ secrets.EMAIL_FROM }}"
+            echo "Used fallback email: $COMMIT_EMAIL"
+          fi
+          
           echo "commit_email=$COMMIT_EMAIL" >> $GITHUB_OUTPUT
-          echo "Committer email: $COMMIT_EMAIL"
+          echo "Final committer email: $COMMIT_EMAIL"
 
       - name: Send pre-release notification
         if: steps.check_changes.outputs.skip != 'true' && steps.check_version.outputs.exists != 'true' && steps.context.outputs.is_pr != 'true'
@@ -437,38 +453,31 @@ jobs:
           to: ${{ steps.committer.outputs.commit_email }}
           from: ${{ secrets.EMAIL_FROM }}
           body: |
-            🧪 A new pre-release version of the Mailer Application is available!
-
-            ═══════════════════════════════════════════════════════════════
-            📋 PRE-RELEASE INFORMATION
-            ═══════════════════════════════════════════════════════════════
-            🔖 Version: ${{ steps.generate_version.outputs.new_version }}
+            🧪 NEW PRE-RELEASE AVAILABLE: ${{ steps.generate_version.outputs.new_version }}
+            
+            📦 Repository: ${{ github.repository }}
             🌿 Branch: ${{ steps.context.outputs.branch_name }}
             📂 Branch Type: ${{ steps.context.outputs.branch_type }}
             🎯 Version Type: ${{ steps.context.outputs.version_type }}
             ${{ steps.context.outputs.jira_ticket && format('🎫 Jira Ticket: {0}', steps.context.outputs.jira_ticket) || '' }}
-            📦 Repository: ${{ github.repository }}
             📅 Date: ${{ github.event.head_commit.timestamp }}
             📄 Commit: ${{ github.sha }}
             👤 Author: ${{ github.event.head_commit.author.name }}
-            💬 Message: "${{ github.event.head_commit.message }}"
+            
+            COMMIT MESSAGE:
+            "${{ github.event.head_commit.message }}"
             
             ⚠️  WARNING: This is a PRE-RELEASE version!
             ⚠️  Do NOT use in production environments.
             ⚠️  Intended for testing and development only.
-
             
-            ═══════════════════════════════════════════════════════════════
-            🔗 LINKS & ACTIONS
-            ═══════════════════════════════════════════════════════════════
-            🌐 View Pre-Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.generate_version.outputs.new_version }}
-            📄 View Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
-            🔄 Compare Changes: https://github.com/${{ github.repository }}/compare/${{ steps.get_base_version.outputs.base_tag }}...${{ steps.generate_version.outputs.new_version }}
+            QUICK LINKS:
+            🌐 Pre-Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.generate_version.outputs.new_version }}
+            📄 Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+            🔄 Changes: https://github.com/${{ github.repository }}/compare/${{ steps.get_base_version.outputs.base_tag }}...${{ steps.generate_version.outputs.new_version }}
             🏠 Repository: https://github.com/${{ github.repository }}
             
-            ═══════════════════════════════════════════════════════════════
-            🚀 TESTING INSTRUCTIONS
-            ═══════════════════════════════════════════════════════════════
+            TESTING INSTRUCTIONS:
             1. Download the pre-release version
             2. Test in a development environment
             3. Report any issues found
