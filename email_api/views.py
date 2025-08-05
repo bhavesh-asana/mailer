@@ -403,3 +403,177 @@ def health_check(request):
         'timestamp': timezone.now(),
         'service': 'Email API'
     })
+
+
+def scheduled_email_dashboard(request):
+    """Dashboard for managing scheduled email campaigns"""
+    from django.shortcuts import render
+    from .models import ScheduledEmailCampaign, EmailTemplate, Recipient
+    from .forms import ScheduledEmailForm
+    
+    if request.method == 'POST':
+        form = ScheduledEmailForm(request.POST, user=request.user)
+        if form.is_valid():
+            campaign = form.save(commit=False)
+            campaign.created_by = request.user
+            campaign.save()
+            form.save_m2m()  # Save the many-to-many relationships
+            
+            from django.contrib import messages
+            messages.success(request, f'Campaign "{campaign.name}" created successfully!')
+            
+            from django.shortcuts import redirect
+            return redirect('admin:email_api_scheduledemailcampaign_changelist')
+    else:
+        form = ScheduledEmailForm(user=request.user)
+    
+    # Get recent campaigns
+    recent_campaigns = ScheduledEmailCampaign.objects.filter(
+        created_by=request.user
+    ).order_by('-created_at')[:10]
+    
+    # Get templates and recipients for stats
+    templates = EmailTemplate.objects.filter(
+        created_by=request.user
+    )
+    recipients = Recipient.objects.filter(
+        created_by=request.user
+    )
+    
+    context = {
+        'form': form,
+        'recent_campaigns': recent_campaigns,
+        'templates': templates,
+        'recipients': recipients,
+    }
+    
+    return render(request, 'admin/email_api/scheduled_email_dashboard.html', context)
+
+
+def sequential_email_dashboard(request):
+    """Dashboard for managing sequential email campaigns"""
+    from django.shortcuts import render
+    from .models import SequentialEmailCampaign, EmailTemplate, Recipient
+    from .forms import SequentialEmailForm
+    
+    # Get user timezone from request
+    user_timezone = request.POST.get('user_timezone') or request.session.get('user_timezone')
+    
+    if request.method == 'POST':
+        form = SequentialEmailForm(request.POST, user=request.user)
+        
+        # Pass user timezone to form for proper datetime handling
+        if user_timezone:
+            form._user_timezone = user_timezone
+            request.session['user_timezone'] = user_timezone
+        
+        if form.is_valid():
+            campaign = form.save(commit=False)
+            campaign.created_by = request.user
+            campaign.save()
+            
+            from django.contrib import messages
+            messages.success(request, f'Sequential campaign "{campaign.name}" created successfully!')
+            
+            from django.shortcuts import redirect
+            return redirect('admin:email_api_sequentialemailcampaign_changelist')
+    else:
+        form = SequentialEmailForm(user=request.user)
+    
+    # Get recent campaigns
+    recent_campaigns = SequentialEmailCampaign.objects.filter(
+        created_by=request.user
+    ).order_by('-created_at')[:10]
+    
+    # Get templates and recipients for stats
+    templates = EmailTemplate.objects.filter(
+        created_by=request.user
+    )
+    recipients = Recipient.objects.filter(
+        created_by=request.user
+    )
+    
+    context = {
+        'form': form,
+        'recent_campaigns': recent_campaigns,
+        'templates': templates,
+        'recipients': recipients,
+        'user_timezone': user_timezone,
+    }
+    
+    return render(request, 'admin/email_api/sequential_email_dashboard.html', context)
+
+
+def debug_sequential_form(request):
+    """Debug view for sequential email form"""
+    from django.shortcuts import render
+    from django.contrib.auth import authenticate, login
+    from django.contrib.auth.models import User
+    from .models import SequentialEmailCampaign, EmailTemplate, Recipient
+    from .forms import SequentialEmailForm
+    
+    # Auto-login test user for debugging
+    if not request.user.is_authenticated:
+        try:
+            test_user = User.objects.get(username='testuser')
+            login(request, test_user)
+            print(f"Auto-logged in test user: {test_user.username}")
+        except User.DoesNotExist:
+            print("Test user not found - creating anonymous session")
+    
+    # Get user timezone from request
+    user_timezone = request.POST.get('user_timezone') or request.session.get('user_timezone', 'America/Chicago')
+    
+    if request.method == 'POST':
+        print("=== DEBUG FORM SUBMISSION ===")
+        print("POST data:", dict(request.POST))
+        print("User timezone:", user_timezone)
+        
+        # Check specific date and time field data
+        date_value = request.POST.get('start_date')
+        time_value = request.POST.get('start_time')
+        print(f"Raw date value: '{date_value}' (type: {type(date_value)})")
+        print(f"Raw time value: '{time_value}' (type: {type(time_value)})")
+        
+        # Check if they're accidentally lists
+        date_values = request.POST.getlist('start_date')
+        time_values = request.POST.getlist('start_time')
+        print(f"Date as list: {date_values}")
+        print(f"Time as list: {time_values}")
+        
+        form = SequentialEmailForm(request.POST, user=request.user)
+        
+        # Pass user timezone to form for proper datetime handling
+        if user_timezone:
+            form._user_timezone = user_timezone
+            request.session['user_timezone'] = user_timezone
+        
+        print("Form is valid:", form.is_valid())
+        if not form.is_valid():
+            print("Form errors:", form.errors)
+            print("Form non-field errors:", form.non_field_errors())
+            
+            # Debug individual field errors
+            for field_name, field in form.fields.items():
+                if field_name in form.errors:
+                    print(f"Field {field_name} errors:", form.errors[field_name])
+                    print(f"Field {field_name} raw data:", form.data.get(field_name))
+                    print(f"Field {field_name} cleaned data:", form.cleaned_data.get(field_name) if hasattr(form, 'cleaned_data') and field_name in form.cleaned_data else 'Not available')
+        
+        if form.is_valid():
+            print("Form validation successful!")
+            return render(request, 'admin/email_api/debug_sequential_form.html', {
+                'form': form,
+                'success': True,
+                'user_timezone': user_timezone,
+            })
+    else:
+        form = SequentialEmailForm(user=request.user)
+    
+    context = {
+        'form': form,
+        'user_timezone': user_timezone,
+        'all_recipients': Recipient.objects.filter(is_active=True),
+    }
+    
+    return render(request, 'admin/email_api/debug_sequential_form.html', context)

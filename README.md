@@ -47,7 +47,17 @@ For comprehensive documentation, visit the [Mailer Wiki](../mailer.wiki/):
 
 ## 🎯 Key Features
 
-- **REST API**: Full REST API with authentication
+- **🎛️ Send Email Dashboard**: User-friendly admin interface for creating and managing email campaigns
+- **📧 Email Templates**: Rich text templates with variable substitution
+- **👥 Recipient Management**: Bulk import/export and contact management
+- **⏰ Scheduled Campaigns**: Send emails immediately or schedule for future dates with recurring intervals
+- **📎 File Attachments**: Support for multiple file attachments per template
+- **📊 Campaign Tracking**: Detailed statistics and delivery tracking
+- **🔄 Bulk Operations**: Send emails to multiple recipients efficiently
+- **📝 Detailed Logging**: Complete audit trail of all email activities
+- **🔐 API Authentication**: Secure API access with user permissions
+- **⚙️ Multiple SMTP Configs**: Support for multiple email providers
+- **📱 REST API**: Full REST API with authentication
 - **Email Templates**: Rich text templates with placeholders
 - **Bulk Email**: Send to multiple recipients efficiently  
 - **Campaign Tracking**: Track email campaigns and statistics
@@ -59,8 +69,35 @@ For comprehensive documentation, visit the [Mailer Wiki](../mailer.wiki/):
 ## 🔧 Quick Access
 
 - **Admin Panel**: http://127.0.0.1:8000/admin/
+- **📧 Send Email Dashboard**: Admin → Email API → Scheduled Email Campaigns → "Send Email Dashboard" button
 - **API Docs**: http://127.0.0.1:8000/swagger/
 - **API Root**: http://127.0.0.1:8000/api/
+
+## 🎛️ Send Email Dashboard
+
+The **Send Email Dashboard** is a powerful admin interface feature that allows you to:
+
+- **📧 Create Campaigns**: Choose templates, select recipients, and schedule emails
+- **⏰ Schedule Emails**: Send immediately or schedule for future dates with recurring intervals
+- **🎯 Template Preview**: Live preview of emails with sample data before sending
+- **🧪 Test Emails**: Send test emails to verify templates and attachments
+- **📊 Track Performance**: Monitor campaign statistics and delivery status
+- **📎 Auto-Attachments**: Templates automatically include their associated files
+
+### Quick Start with Dashboard:
+1. Access Django Admin: `http://127.0.0.1:8001/admin/`
+2. Navigate to **Email API** → **Scheduled Email Campaigns**
+3. Click **"📧 Send Email Dashboard"** button
+4. Create templates and recipients, then build your campaign!
+
+For detailed dashboard documentation, see [docs/SEND_EMAIL_DASHBOARD.md](docs/SEND_EMAIL_DASHBOARD.md).
+
+### Automation
+Set up automated sending with cron:
+```bash
+# Add to crontab to check every 5 minutes
+*/5 * * * * cd /path/to/mailer && python manage.py send_scheduled_emails
+```
 
 ## 📁 Project Structure
 

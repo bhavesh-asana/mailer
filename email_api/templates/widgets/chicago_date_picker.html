@@ -1,0 +1,20 @@
+{% include "django/forms/widgets/input.html" %}
+<script>
+// Chicago timezone support for date picker
+document.addEventListener('DOMContentLoaded', function() {
+    const dateInput = document.querySelector('input[name="{{ widget.name }}"]');
+    if (dateInput) {
+        // Set min date to today
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        dateInput.min = `${yyyy}-${mm}-${dd}`;
+        
+        // Set default to today if no value
+        if (!dateInput.value) {
+            dateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+    }
+});
+</script>

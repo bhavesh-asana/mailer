@@ -1,0 +1,652 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Send Email Dashboard - {{ site_title|default:"Django site admin" }}{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        .dashboard-container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .dashboard-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .dashboard-card h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007cba;
+            padding-bottom: 10px;
+        }
+        
+        .form-row {
+            margin-bottom: 15px;
+        }
+        
+        .form-row label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px;
+        }
+        
+        .btn-primary {
+            background-color: #007cba;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        
+        .recipients-container {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+        }
+        
+        .template-preview {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .template-preview h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .preview-content {
+            max-height: 300px;
+            overflow-y: auto;
+            background: white;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .recent-campaigns {
+            margin-top: 30px;
+        }
+        
+        .campaigns-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .campaigns-table th,
+        .campaigns-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .campaigns-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-completed { background-color: #d4edda; color: #155724; }
+        .status-active { background-color: #cce5ff; color: #004085; }
+        .status-scheduled { background-color: #fff3cd; color: #856404; }
+        .status-draft { background-color: #e2e3e5; color: #383d41; }
+        .status-paused { background-color: #f8d7da; color: #721c24; }
+        
+        .test-email-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .attachment-list {
+            margin-top: 10px;
+        }
+        
+        .attachment-item {
+            display: inline-block;
+            background: #e9ecef;
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+        
+        .timezone-info {
+            background: #e8f4fd;
+            border: 1px solid #b8daff;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-top: 5px;
+            font-size: 13px;
+            color: #004085;
+        }
+        
+        .timezone-info .timezone-icon {
+            margin-right: 5px;
+        }
+        
+        .datetime-validation-error {
+            color: #dc3545;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1>📧 Send Email Dashboard</h1>
+    <p>Create and send email campaigns using templates with scheduled intervals and attachments.</p>
+    
+    <div class="dashboard-grid">
+        <!-- Email Campaign Form -->
+        <div class="dashboard-card">
+            <h3>📤 Create Email Campaign</h3>
+            
+            <form method="post" id="campaign-form">
+                {% csrf_token %}
+                
+                <div class="form-row">
+                    <label for="{{ form.name.id_for_label }}">Campaign Name:</label>
+                    {{ form.name }}
+                    {% if form.name.help_text %}
+                        <small>{{ form.name.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    <label for="{{ form.template.id_for_label }}">Email Template:</label>
+                    {{ form.template }}
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="previewTemplate()">
+                        👁️ Preview
+                    </button>
+                    {% if form.template.help_text %}
+                        <small>{{ form.template.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="template-preview" id="template-preview">
+                    <h4>Template Preview</h4>
+                    <div class="preview-content" id="preview-content">
+                        <p>Select a template to see preview...</p>
+                    </div>
+                    <div class="attachment-list" id="preview-attachments"></div>
+                    
+                    <div class="test-email-section">
+                        <h5>🧪 Send Test Email</h5>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="email" id="test-email" placeholder="test@example.com" class="form-control" style="flex: 1;">
+                            <button type="button" class="btn btn-success btn-sm" onclick="sendTestEmail()">
+                                📧 Send Test
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <label for="{{ form.recipients.id_for_label }}">Recipients:</label>
+                    <div class="recipients-container">
+                        {{ form.recipients }}
+                    </div>
+                    {% if form.recipients.help_text %}
+                        <small>{{ form.recipients.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    <label for="{{ form.interval.id_for_label }}">Send Interval:</label>
+                    {{ form.interval }}
+                    {% if form.interval.help_text %}
+                        <small>{{ form.interval.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    <label for="{{ form.scheduled_datetime.id_for_label }}">Scheduled Date & Time:</label>
+                    {{ form.scheduled_datetime }}
+                    <div id="timezone-info" class="timezone-info">
+                        <span class="timezone-icon">🌍</span>
+                        Your timezone: <strong id="user-timezone">Loading...</strong>
+                        <span id="utc-offset"></span>
+                        <br>
+                        <small>📅 Times are automatically converted to UTC for storage</small>
+                    </div>
+                    {% if form.scheduled_datetime.help_text %}
+                        <small>{{ form.scheduled_datetime.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row" id="end-datetime-row">
+                    <label for="{{ form.end_datetime.id_for_label }}">End Date & Time (Optional):</label>
+                    {{ form.end_datetime }}
+                    {% if form.end_datetime.help_text %}
+                        <small>{{ form.end_datetime.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    <button type="submit" class="btn btn-primary">
+                        🚀 Create Campaign
+                    </button>
+                    <a href="{% url 'admin:email_api_scheduledemailcampaign_changelist' %}" class="btn btn-secondary">
+                        📋 View All Campaigns
+                    </a>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Statistics and Info -->
+        <div class="dashboard-card">
+            <h3>📊 Quick Stats</h3>
+            
+            <div style="margin-bottom: 20px;">
+                <h4>📧 Templates Available</h4>
+                <p><strong>{{ templates.count }}</strong> email templates ready to use</p>
+                
+                <h4>👥 Active Recipients</h4>
+                <p><strong>{{ recipients.count }}</strong> recipients available</p>
+                
+                <div style="margin-top: 20px;">
+                    <a href="{% url 'admin:email_api_emailtemplate_add' %}" class="btn btn-success">
+                        ➕ Create Template
+                    </a>
+                    <a href="{% url 'admin:email_api_recipient_add' %}" class="btn btn-success">
+                        👤 Add Recipient
+                    </a>
+                </div>
+            </div>
+            
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 15px; margin-bottom: 15px;">
+                <h5 style="margin-top: 0; color: #856404;">🌍 Timezone Information</h5>
+                <p style="margin-bottom: 5px; font-size: 13px;">• All times are displayed in your local timezone</p>
+                <p style="margin-bottom: 5px; font-size: 13px;">• Times are automatically converted to UTC for storage</p>
+                <p style="margin: 0; font-size: 13px;">• Campaigns will run at the exact time you specify in your timezone</p>
+            </div>
+            
+            <div>
+                <h4>📚 Quick Links</h4>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin: 8px 0;">
+                        <a href="{% url 'admin:email_api_emailtemplate_changelist' %}">📧 Manage Templates</a>
+                    </li>
+                    <li style="margin: 8px 0;">
+                        <a href="{% url 'admin:email_api_recipient_changelist' %}">👥 Manage Recipients</a>
+                    </li>
+                    <li style="margin: 8px 0;">
+                        <a href="{% url 'admin:email_api_emailattachment_changelist' %}">📎 Manage Attachments</a>
+                    </li>
+                    <li style="margin: 8px 0;">
+                        <a href="{% url 'admin:email_api_emaillog_changelist' %}">📊 Email Logs</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Campaigns -->
+    <div class="recent-campaigns">
+        <h3>📈 Recent Campaigns</h3>
+        
+        {% if recent_campaigns %}
+            <table class="campaigns-table">
+                <thead>
+                    <tr>
+                        <th>Campaign Name</th>
+                        <th>Template</th>
+                        <th>Status</th>
+                        <th>Interval</th>
+                        <th>Scheduled</th>
+                        <th>Created By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for campaign in recent_campaigns %}
+                    <tr>
+                        <td>{{ campaign.name }}</td>
+                        <td>{{ campaign.template.name }}</td>
+                        <td>
+                            <span class="status-badge status-{{ campaign.status }}">
+                                {{ campaign.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ campaign.get_interval_display }}</td>
+                        <td>
+                            <span class="scheduled-time" data-utc="{{ campaign.scheduled_datetime|date:'c' }}">
+                                {{ campaign.scheduled_datetime|date:"M d, Y H:i" }} UTC
+                            </span>
+                        </td>
+                        <td>{{ campaign.created_by.username|default:"System" }}</td>
+                        <td>
+                            <a href="{% url 'admin:email_api_scheduledemailcampaign_change' campaign.id %}" class="btn btn-secondary btn-sm">
+                                ✏️ Edit
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No campaigns created yet. Create your first campaign above!</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function previewTemplate() {
+    const templateSelect = document.getElementById('{{ form.template.id_for_label }}');
+    const templateId = templateSelect.value;
+    
+    if (!templateId) {
+        alert('Please select a template first.');
+        return;
+    }
+    
+    fetch(`/admin/email_api/scheduledemailcampaign/preview-template/${templateId}/`)
+        .then(response => response.json())
+        .then(data => {
+            const previewDiv = document.getElementById('template-preview');
+            const contentDiv = document.getElementById('preview-content');
+            const attachmentsDiv = document.getElementById('preview-attachments');
+            
+            if (data.success) {
+                contentDiv.innerHTML = `
+                    <h5>Subject: ${data.subject}</h5>
+                    ${data.is_html ? data.body : '<pre>' + data.body + '</pre>'}
+                `;
+                
+                if (data.attachments && data.attachments.length > 0) {
+                    const attachmentHtml = data.attachments.map(att => 
+                        `<span class="attachment-item">📎 ${att.name} (${att.size})</span>`
+                    ).join('');
+                    attachmentsDiv.innerHTML = `<strong>Attachments:</strong> ${attachmentHtml}`;
+                } else {
+                    attachmentsDiv.innerHTML = '<em>No attachments</em>';
+                }
+                
+                previewDiv.style.display = 'block';
+            } else {
+                alert('Error loading template preview: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading template preview');
+        });
+}
+
+function sendTestEmail() {
+    const templateSelect = document.getElementById('{{ form.template.id_for_label }}');
+    const testEmailInput = document.getElementById('test-email');
+    
+    const templateId = templateSelect.value;
+    const testEmail = testEmailInput.value;
+    
+    if (!templateId) {
+        alert('Please select a template first.');
+        return;
+    }
+    
+    if (!testEmail || !testEmail.includes('@')) {
+        alert('Please enter a valid email address.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('template_id', templateId);
+    formData.append('test_email', testEmail);
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    
+    fetch('/admin/email_api/scheduledemailcampaign/send-test-email/', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+        } else {
+            alert('❌ Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error sending test email');
+    });
+}
+
+// Show/hide end datetime based on interval selection
+document.getElementById('{{ form.interval.id_for_label }}').addEventListener('change', function() {
+    const endDatetimeRow = document.getElementById('end-datetime-row');
+    if (this.value === 'once') {
+        endDatetimeRow.style.display = 'none';
+    } else {
+        endDatetimeRow.style.display = 'block';
+    }
+});
+
+// Set default datetime to current time + 1 hour in user's timezone
+document.addEventListener('DOMContentLoaded', function() {
+    // Display user's timezone
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    document.getElementById('user-timezone').textContent = userTimezone;
+    
+    // Calculate and display UTC offset
+    const now = new Date();
+    const utcOffset = -now.getTimezoneOffset() / 60;
+    const offsetText = utcOffset >= 0 ? `+${utcOffset}` : `${utcOffset}`;
+    document.getElementById('utc-offset').textContent = `(UTC${offsetText})`;
+    
+    // Set default datetime to current time + 1 hour in user's local timezone
+    now.setHours(now.getHours() + 1);
+    
+    // Convert to local datetime-local format (YYYY-MM-DDTHH:MM)
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    
+    const defaultDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+    
+    const scheduledInput = document.getElementById('{{ form.scheduled_datetime.id_for_label }}');
+    if (!scheduledInput.value) {
+        scheduledInput.value = defaultDateTime;
+    }
+    
+    // Initially hide end datetime if interval is 'once'
+    const intervalSelect = document.getElementById('{{ form.interval.id_for_label }}');
+    if (intervalSelect.value === 'once') {
+        document.getElementById('end-datetime-row').style.display = 'none';
+    }
+    
+    // Add event listener for datetime validation
+    scheduledInput.addEventListener('change', function() {
+        validateDateTime(this);
+    });
+    
+    const endDatetimeInput = document.getElementById('{{ form.end_datetime.id_for_label }}');
+    if (endDatetimeInput) {
+        endDatetimeInput.addEventListener('change', function() {
+            validateEndDateTime(this, scheduledInput);
+        });
+    }
+    
+    // Show user-friendly current time
+    updateCurrentTimeDisplay();
+    setInterval(updateCurrentTimeDisplay, 1000); // Update every second
+    
+    // Convert UTC times to local time in the campaigns table
+    convertUTCTimesToLocal();
+});
+
+// Convert UTC times to local timezone in the campaigns table
+function convertUTCTimesToLocal() {
+    const scheduledTimes = document.querySelectorAll('.scheduled-time');
+    scheduledTimes.forEach(timeElement => {
+        const utcTimeString = timeElement.getAttribute('data-utc');
+        if (utcTimeString) {
+            const utcDate = new Date(utcTimeString);
+            const localTimeString = utcDate.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZoneName: 'short'
+            });
+            timeElement.textContent = localTimeString;
+            timeElement.title = `UTC: ${utcDate.toISOString()}`;
+        }
+    });
+}
+
+// Display current time in user's timezone
+function updateCurrentTimeDisplay() {
+    const now = new Date();
+    const timeString = now.toLocaleString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short'
+    });
+    
+    // Update or create current time display
+    let currentTimeDiv = document.getElementById('current-time-display');
+    if (!currentTimeDiv) {
+        currentTimeDiv = document.createElement('div');
+        currentTimeDiv.id = 'current-time-display';
+        currentTimeDiv.style.cssText = `
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #495057;
+            text-align: center;
+        `;
+        
+        const timezoneInfo = document.getElementById('timezone-info');
+        if (timezoneInfo) {
+            timezoneInfo.appendChild(currentTimeDiv);
+        }
+    }
+    
+    currentTimeDiv.innerHTML = `🕐 Current time: <strong>${timeString}</strong>`;
+}
+
+// Validate that scheduled datetime is in the future
+function validateDateTime(input) {
+    const selectedDateTime = new Date(input.value);
+    const now = new Date();
+    
+    // Remove any existing error messages
+    const existingError = input.parentNode.querySelector('.datetime-validation-error');
+    if (existingError) {
+        existingError.remove();
+    }
+    
+    if (selectedDateTime <= now) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'datetime-validation-error';
+        errorDiv.innerHTML = '⚠️ Scheduled time must be in the future!';
+        input.parentNode.appendChild(errorDiv);
+        input.focus();
+        return false;
+    }
+    return true;
+}
+
+// Validate that end datetime is after scheduled datetime
+function validateEndDateTime(endInput, startInput) {
+    if (!endInput.value || !startInput.value) return true;
+    
+    // Remove any existing error messages
+    const existingError = endInput.parentNode.querySelector('.datetime-validation-error');
+    if (existingError) {
+        existingError.remove();
+    }
+    
+    const endDateTime = new Date(endInput.value);
+    const startDateTime = new Date(startInput.value);
+    
+    if (endDateTime <= startDateTime) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'datetime-validation-error';
+        errorDiv.innerHTML = '⚠️ End time must be after the scheduled start time!';
+        endInput.parentNode.appendChild(errorDiv);
+        endInput.focus();
+        return false;
+    }
+    return true;
+}
+</script>
+{% endblock %}

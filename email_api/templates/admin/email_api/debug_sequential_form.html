@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Sequential Form</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .form-row { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input, select, textarea { width: 300px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .error { color: red; font-size: 12px; margin-top: 5px; }
+        .recipients-field {
+            height: 200px !important;
+            width: 100% !important;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            padding: 8px;
+        }
+        .recipients-field option {
+            padding: 8px;
+            margin: 2px 0;
+        }
+        .recipients-field option:selected {
+            background-color: #007cba !important;
+            color: white !important;
+        }
+        .form-help {
+            color: #666;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        button { background: #007cba; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Debug Sequential Email Form</h1>
+    
+    <form method="post">
+        {% csrf_token %}
+        
+        <!-- Show all form errors -->
+        {% if form.errors %}
+            <div style="background: #ffebee; border: 1px solid #f44336; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                <h3>Form Errors:</h3>
+                {{ form.errors }}
+            </div>
+        {% endif %}
+        
+        <div class="form-row">
+            <label for="{{ form.name.id_for_label }}">Campaign Name:</label>
+            {{ form.name }}
+            {% if form.name.errors %}
+                <div class="error">{{ form.name.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.template.id_for_label }}">Template:</label>
+            {{ form.template }}
+            {% if form.template.errors %}
+                <div class="error">{{ form.template.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.interval_minutes.id_for_label }}">Interval (minutes):</label>
+            {{ form.interval_minutes }}
+            {% if form.interval_minutes.errors %}
+                <div class="error">{{ form.interval_minutes.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.start_date.id_for_label }}">Start Date:</label>
+            {{ form.start_date }}
+            {% if form.start_date.errors %}
+                <div class="error">{{ form.start_date.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.start_time.id_for_label }}">Start Time:</label>
+            {{ form.start_time }}
+            {% if form.start_time.errors %}
+                <div class="error">{{ form.start_time.errors }}</div>
+            {% endif %}
+            <small>Chicago timezone (your local time)</small>
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.selected_recipients.id_for_label }}">Recipients:</label>
+            <select name="selected_recipients" id="{{ form.selected_recipients.id_for_label }}" class="recipients-field" multiple>
+                {% for recipient in all_recipients %}
+                    <option value="{{ recipient.id }}">{{ recipient.first_name }} {{ recipient.last_name }} ({{ recipient.email }})</option>
+                {% endfor %}
+            </select>
+            {% if form.selected_recipients.errors %}
+                <div class="error">{{ form.selected_recipients.errors }}</div>
+            {% endif %}
+            <div class="form-help">Hold Ctrl (or Cmd on Mac) and click to select multiple recipients. Order matters - emails will be sent in the order you select.</div>
+        </div>
+        
+        <input type="hidden" name="user_timezone" value="America/Chicago">
+        
+        <button type="submit">Test Submit</button>
+    </form>
+    
+    <script>
+        // Set default date and time for Chicago timezone
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default date to today
+            const dateInput = document.getElementById('{{ form.start_date.id_for_label }}');
+            if (dateInput && !dateInput.value) {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                dateInput.value = `${year}-${month}-${day}`;
+            }
+            
+            // Set default time to current time + 5 minutes
+            const timeInput = document.getElementById('{{ form.start_time.id_for_label }}');
+            if (timeInput && !timeInput.value) {
+                const now = new Date();
+                now.setMinutes(now.getMinutes() + 5);
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                timeInput.value = `${hours}:${minutes}`;
+            }
+            
+            // Enhanced multiple select functionality
+            const recipientsSelect = document.getElementById('{{ form.selected_recipients.id_for_label }}');
+            if (recipientsSelect) {
+                // Add visual feedback for selections
+                recipientsSelect.addEventListener('change', function() {
+                    const selectedCount = this.selectedOptions.length;
+                    const helpText = this.parentNode.querySelector('.form-help');
+                    if (helpText) {
+                        helpText.innerHTML = `Selected ${selectedCount} recipient(s). Hold Ctrl (or Cmd on Mac) and click to select multiple recipients. Order matters - emails will be sent in the order you select.`;
+                    }
+                });
+                
+                // Improve visual selection feedback
+                recipientsSelect.addEventListener('click', function(e) {
+                    // Small delay to let the selection register
+                    setTimeout(() => {
+                        Array.from(this.options).forEach(option => {
+                            if (option.selected) {
+                                option.style.backgroundColor = '#007cba';
+                                option.style.color = 'white';
+                            } else {
+                                option.style.backgroundColor = '';
+                                option.style.color = '';
+                            }
+                        });
+                    }, 10);
+                });
+            }
+        });
+    </script>
+</body>
+</html>

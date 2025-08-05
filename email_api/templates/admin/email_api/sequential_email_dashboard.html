@@ -1,0 +1,689 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Sequential Email Dashboard - {{ site_title|default:"Django site admin" }}{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        .dashboard-container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .dashboard-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .dashboard-card h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #17a2b8;
+            padding-bottom: 10px;
+        }
+        
+        .form-row {
+            margin-bottom: 15px;
+        }
+        
+        .form-row label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px;
+        }
+        
+        .btn-primary {
+            background-color: #17a2b8;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .btn-info {
+            background-color: #17a2b8;
+            color: white;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        
+        .recipients-container {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+        }
+        
+        .schedule-preview {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .schedule-table th,
+        .schedule-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            font-size: 13px;
+        }
+        
+        .schedule-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .recent-campaigns {
+            margin-top: 30px;
+        }
+        
+        .campaigns-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .campaigns-table th,
+        .campaigns-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .campaigns-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-completed { background-color: #d4edda; color: #155724; }
+        .status-sending { background-color: #cce5ff; color: #004085; }
+        .status-scheduled { background-color: #fff3cd; color: #856404; }
+        .status-draft { background-color: #e2e3e5; color: #383d41; }
+        .status-paused { background-color: #f8d7da; color: #721c24; }
+        .status-cancelled { background-color: #f8d7da; color: #721c24; }
+        
+        .timezone-info {
+            background: #e8f4fd;
+            border: 1px solid #b8daff;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-top: 5px;
+            font-size: 13px;
+            color: #004085;
+        }
+        
+        .sequential-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .sequential-info h5 {
+            margin-top: 0;
+            color: #0c5460;
+        }
+        
+        .interval-calculator {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1>⚡ Sequential Email Dashboard</h1>
+    <p>Send emails to recipients one by one with specified time intervals between each email.</p>
+    
+    <div class="sequential-info">
+        <h5>🎯 How Sequential Emails Work</h5>
+        <p style="margin: 0; font-size: 14px;">
+            <strong>Example:</strong> If you select 4 recipients (A, B, C, D) with a 10-minute interval:<br>
+            • Email to recipient A: 0 minutes (start time)<br>
+            • Email to recipient B: 10 minutes after start<br>
+            • Email to recipient C: 20 minutes after start<br>
+            • Email to recipient D: 30 minutes after start<br><br>
+            <strong>🌍 Timezone Handling:</strong> Enter your start time in your local timezone. The system automatically converts and handles all scheduling correctly, regardless of where your server is located.
+        </p>
+    </div>
+    
+    <div class="dashboard-grid">
+        <!-- Sequential Campaign Form -->
+        <div class="dashboard-card">
+            <h3>⚡ Create Sequential Campaign</h3>
+            
+            <form method="post" id="sequential-campaign-form">
+                {% csrf_token %}
+                
+                <!-- Display form errors -->
+                {% if form.non_field_errors %}
+                    <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; margin-bottom: 15px; color: #721c24;">
+                        <strong>⚠️ Form Errors:</strong>
+                        {% for error in form.non_field_errors %}
+                            <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+                <!-- Hidden field for user timezone -->
+                <input type="hidden" name="user_timezone" id="user-timezone-input" value="">
+                
+                <div class="form-row">
+                    <label for="{{ form.name.id_for_label }}">Campaign Name:</label>
+                    {{ form.name }}
+                    {% if form.name.help_text %}
+                        <small>{{ form.name.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    <label for="{{ form.template.id_for_label }}">Email Template:</label>
+                    {{ form.template }}
+                    {% if form.template.help_text %}
+                        <small>{{ form.template.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    <label for="{{ form.selected_recipients.id_for_label }}">Recipients (in order):</label>
+                    <div class="recipients-container">
+                        {{ form.selected_recipients }}
+                    </div>
+                    {% if form.selected_recipients.errors %}
+                        <div style="color: red; font-size: 12px; margin-top: 5px;">
+                            {% for error in form.selected_recipients.errors %}
+                                <div>❌ {{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <small style="color: #666;">
+                        📋 <strong>Important:</strong> Select recipients in the order you want emails to be sent. 
+                        Use Ctrl+Click to select multiple recipients.
+                    </small>
+                    {% if form.selected_recipients.help_text %}
+                        <small>{{ form.selected_recipients.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    <label for="{{ form.interval_minutes.id_for_label }}">Interval (minutes):</label>
+                    {{ form.interval_minutes }}
+                    <div class="interval-calculator" id="interval-info">
+                        <small>⏱️ Total campaign duration will be calculated when you select recipients</small>
+                    </div>
+                    {% if form.interval_minutes.help_text %}
+                        <small>{{ form.interval_minutes.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    <label for="{{ form.start_datetime.id_for_label }}">Start Date & Time:</label>
+                    {{ form.start_datetime }}
+                    {% if form.start_datetime.errors %}
+                        <div style="color: red; font-size: 12px; margin-top: 5px;">
+                            {% for error in form.start_datetime.errors %}
+                                <div>❌ {{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <div id="timezone-info" class="timezone-info">
+                        <span>🌍</span>
+                        <strong>Your timezone:</strong> <span id="user-timezone">Loading...</span>
+                        <span id="utc-offset"></span><br>
+                        <small>💡 Enter time in your local timezone. The system will automatically convert and store it correctly.</small>
+                    </div>
+                    {% if form.start_datetime.help_text %}
+                        <small>{{ form.start_datetime.help_text }}</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    <button type="button" class="btn btn-info" onclick="previewSchedule()">
+                        📅 Preview Schedule
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        🚀 Create Campaign
+                    </button>
+                    <a href="{% url 'admin:email_api_sequentialemailcampaign_changelist' %}" class="btn btn-secondary">
+                        📋 View All Campaigns
+                    </a>
+                </div>
+            </form>
+            
+            <div class="schedule-preview" id="schedule-preview">
+                <h4>📅 Email Schedule Preview</h4>
+                <div id="schedule-content"></div>
+            </div>
+        </div>
+        
+        <!-- Statistics and Info -->
+        <div class="dashboard-card">
+            <h3>📊 Quick Stats</h3>
+            
+            <div style="margin-bottom: 20px;">
+                <h4>📧 Templates Available</h4>
+                <p><strong>{{ templates.count }}</strong> email templates ready to use</p>
+                
+                <h4>👥 Active Recipients</h4>
+                <p><strong>{{ recipients.count }}</strong> recipients available</p>
+                
+                <div style="margin-top: 20px;">
+                    <a href="{% url 'admin:email_api_emailtemplate_add' %}" class="btn btn-success">
+                        ➕ Create Template
+                    </a>
+                    <a href="{% url 'admin:email_api_recipient_add' %}" class="btn btn-success">
+                        👤 Add Recipient
+                    </a>
+                </div>
+            </div>
+            
+            <div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 4px; padding: 15px; margin-bottom: 15px;">
+                <h5 style="margin-top: 0; color: #0c5460;">⚡ Sequential Email Benefits</h5>
+                <ul style="margin: 0; padding-left: 20px; font-size: 13px;">
+                    <li>Avoid overwhelming email servers</li>
+                    <li>Better delivery rates with staggered sending</li>
+                    <li>Controlled email flow for better tracking</li>
+                    <li>Personalized timing for each recipient</li>
+                </ul>
+            </div>
+            
+            <div>
+                <h4>📚 Quick Links</h4>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin: 8px 0;">
+                        <a href="{% url 'admin:email_api_emailtemplate_changelist' %}">📧 Manage Templates</a>
+                    </li>
+                    <li style="margin: 8px 0;">
+                        <a href="{% url 'admin:email_api_recipient_changelist' %}">👥 Manage Recipients</a>
+                    </li>
+                    <li style="margin: 8px 0;">
+                        <a href="{% url 'admin:email_api_scheduledemailcampaign_changelist' %}">📊 Bulk Campaigns</a>
+                    </li>
+                    <li style="margin: 8px 0;">
+                        <a href="{% url 'admin:email_api_emaillog_changelist' %}">📊 Email Logs</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Campaigns -->
+    <div class="recent-campaigns">
+        <h3>📈 Recent Sequential Campaigns</h3>
+        
+        {% if recent_campaigns %}
+            <table class="campaigns-table">
+                <thead>
+                    <tr>
+                        <th>Campaign Name</th>
+                        <th>Template</th>
+                        <th>Status</th>
+                        <th>Interval</th>
+                        <th>Recipients</th>
+                        <th>Progress</th>
+                        <th>Start Time</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for campaign in recent_campaigns %}
+                    <tr>
+                        <td>{{ campaign.name }}</td>
+                        <td>{{ campaign.template.name }}</td>
+                        <td>
+                            <span class="status-badge status-{{ campaign.status }}">
+                                {{ campaign.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ campaign.interval_minutes }} min</td>
+                        <td>{{ campaign.total_recipients }}</td>
+                        <td>{{ campaign.emails_sent }}/{{ campaign.total_recipients }}</td>
+                        <td>
+                            <span class="scheduled-time" data-utc="{{ campaign.start_datetime|date:'c' }}">
+                                {{ campaign.start_datetime|date:"M d, Y H:i" }} UTC
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{% url 'admin:email_api_sequentialemailcampaign_change' campaign.id %}" class="btn btn-secondary btn-sm">
+                                ✏️ Edit
+                            </a>
+                            <button onclick="viewSchedule('{{ campaign.id }}')" class="btn btn-info btn-sm">
+                                📅 Schedule
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No sequential campaigns created yet. Create your first campaign above!</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Display user's timezone
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    document.getElementById('user-timezone').textContent = userTimezone;
+    
+    // Set timezone in hidden input for form submission
+    document.getElementById('user-timezone-input').value = userTimezone;
+    
+    // Calculate and display UTC offset
+    const now = new Date();
+    const utcOffset = -now.getTimezoneOffset() / 60;
+    const offsetText = utcOffset >= 0 ? `+${utcOffset}` : `${utcOffset}`;
+    document.getElementById('utc-offset').textContent = `(UTC${offsetText})`;
+    
+    // Set default datetime to current user's local time + 5 minutes
+    const defaultTime = new Date(now.getTime() + 5 * 60000); // Add 5 minutes
+    const defaultDateTime = formatDateTimeLocalForTimezone(defaultTime, userTimezone);
+    
+    const startInput = document.getElementById('{{ form.start_datetime.id_for_label }}');
+    if (!startInput.value) {
+        startInput.value = defaultDateTime;
+    }
+    
+    // Add event listeners
+    const recipientSelect = document.getElementById('{{ form.selected_recipients.id_for_label }}');
+    const intervalInput = document.getElementById('{{ form.interval_minutes.id_for_label }}');
+    
+    recipientSelect.addEventListener('change', updateIntervalInfo);
+    intervalInput.addEventListener('input', updateIntervalInfo);
+    
+    // Convert UTC times to local time in campaigns table
+    convertUTCTimesToLocal();
+    
+    // Initial calculation
+    updateIntervalInfo();
+    
+    // Add form submission handler for debugging
+    document.getElementById('sequential-campaign-form').addEventListener('submit', function(e) {
+        const startInput = document.getElementById('{{ form.start_datetime.id_for_label }}');
+        const userTimezone = document.getElementById('user-timezone-input').value;
+        
+        console.log('Form submission:', {
+            'start_datetime': startInput.value,
+            'user_timezone': userTimezone,
+            'current_time': new Date().toISOString()
+        });
+        
+        // Validate that datetime is properly formatted
+        if (startInput.value && !startInput.value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
+            alert('Please select a valid date and time');
+            e.preventDefault();
+            return false;
+        }
+    });
+});
+
+function formatDateTimeLocalForTimezone(date, timezone) {
+    // Format date for datetime-local input (YYYY-MM-DDTHH:MM)
+    // Always use the local date/time as seen by the user
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function formatDateTimeLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function updateIntervalInfo() {
+    const recipientSelect = document.getElementById('{{ form.selected_recipients.id_for_label }}');
+    const intervalInput = document.getElementById('{{ form.interval_minutes.id_for_label }}');
+    const infoDiv = document.getElementById('interval-info');
+    
+    const selectedCount = recipientSelect.selectedOptions.length;
+    const interval = parseInt(intervalInput.value) || 0;
+    
+    if (selectedCount > 0 && interval > 0) {
+        const totalMinutes = (selectedCount - 1) * interval;
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        
+        let durationText = '';
+        if (hours > 0) {
+            durationText = `${hours}h ${minutes}m`;
+        } else {
+            durationText = `${minutes}m`;
+        }
+        
+        infoDiv.innerHTML = `
+            <small>
+                ⏱️ <strong>${selectedCount} recipients</strong> with <strong>${interval}-minute</strong> intervals<br>
+                📊 Total campaign duration: <strong>${durationText}</strong><br>
+                🚀 Last email will be sent: <strong>${totalMinutes} minutes</strong> after start
+            </small>
+        `;
+    } else {
+        infoDiv.innerHTML = '<small>⏱️ Select recipients and set interval to see duration</small>';
+    }
+}
+
+function previewSchedule() {
+    const recipientSelect = document.getElementById('{{ form.selected_recipients.id_for_label }}');
+    const intervalInput = document.getElementById('{{ form.interval_minutes.id_for_label }}');
+    const startInput = document.getElementById('{{ form.start_datetime.id_for_label }}');
+    const previewDiv = document.getElementById('schedule-preview');
+    const contentDiv = document.getElementById('schedule-content');
+    
+    const selectedOptions = Array.from(recipientSelect.selectedOptions);
+    const interval = parseInt(intervalInput.value) || 0;
+    const startTime = new Date(startInput.value);
+    
+    if (selectedOptions.length === 0) {
+        alert('Please select at least one recipient');
+        return;
+    }
+    
+    if (interval <= 0) {
+        alert('Please set a valid interval');
+        return;
+    }
+    
+    if (isNaN(startTime.getTime())) {
+        alert('Please set a valid start time');
+        return;
+    }
+    
+    // Get user timezone for display
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    
+    let scheduleHTML = '<table class="schedule-table"><thead><tr><th>Order</th><th>Recipient</th><th>Scheduled Time (Your Local Time)</th></tr></thead><tbody>';
+    
+    selectedOptions.forEach((option, index) => {
+        const sendTime = new Date(startTime.getTime() + (index * interval * 60000));
+        const timeString = sendTime.toLocaleString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short',
+            timeZone: userTimezone
+        });
+        
+        scheduleHTML += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${option.text}</td>
+                <td>${timeString}</td>
+            </tr>
+        `;
+    });
+    
+    scheduleHTML += '</tbody></table>';
+    
+    // Add timezone info
+    scheduleHTML += `<div style="margin-top: 10px; font-size: 12px; color: #666;">
+        <strong>🌍 Timezone:</strong> ${userTimezone}<br>
+        <strong>📅 Campaign Duration:</strong> ${(selectedOptions.length - 1) * interval} minutes<br>
+        <strong>🚀 Last Email:</strong> ${((selectedOptions.length - 1) * interval)} minutes after start
+    </div>`;
+    
+    contentDiv.innerHTML = scheduleHTML;
+    previewDiv.style.display = 'block';
+}
+
+function viewSchedule(campaignId) {
+    fetch(`/admin/email_api/sequentialemailcampaign/get-schedule/${campaignId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                let scheduleHTML = `<h4>📅 Schedule for "${data.campaign_name}"</h4>`;
+                scheduleHTML += '<table class="schedule-table"><thead><tr><th>Order</th><th>Recipient</th><th>Scheduled Time</th><th>Status</th></tr></thead><tbody>';
+                
+                data.schedule.forEach((item, index) => {
+                    const sendTime = new Date(item.scheduled_time);
+                    const timeString = sendTime.toLocaleString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZoneName: 'short'
+                    });
+                    
+                    scheduleHTML += `
+                        <tr>
+                            <td>${item.send_order + 1}</td>
+                            <td>${item.recipient_name}</td>
+                            <td>${timeString}</td>
+                            <td><span class="status-badge status-${item.status}">${item.status}</span></td>
+                        </tr>
+                    `;
+                });
+                
+                scheduleHTML += '</tbody></table>';
+                
+                // Show in a modal or alert (for now, using alert)
+                const modal = window.open('', '_blank', 'width=800,height=600,scrollbars=yes');
+                modal.document.write(`
+                    <html>
+                        <head><title>Campaign Schedule</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; padding: 20px; }
+                            table { width: 100%; border-collapse: collapse; }
+                            th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; }
+                            th { background-color: #f8f9fa; }
+                            .status-badge { padding: 3px 8px; border-radius: 12px; font-size: 12px; }
+                            .status-pending { background-color: #e2e3e5; color: #383d41; }
+                            .status-scheduled { background-color: #fff3cd; color: #856404; }
+                            .status-sent { background-color: #d4edda; color: #155724; }
+                            .status-failed { background-color: #f8d7da; color: #721c24; }
+                        </style>
+                        </head>
+                        <body>${scheduleHTML}</body>
+                    </html>
+                `);
+            } else {
+                alert('Error loading schedule: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading schedule');
+        });
+}
+
+function convertUTCTimesToLocal() {
+    const scheduledTimes = document.querySelectorAll('.scheduled-time');
+    scheduledTimes.forEach(timeElement => {
+        const utcTimeString = timeElement.getAttribute('data-utc');
+        if (utcTimeString) {
+            const utcDate = new Date(utcTimeString);
+            const localTimeString = utcDate.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZoneName: 'short'
+            });
+            timeElement.textContent = localTimeString;
+            timeElement.title = `UTC: ${utcDate.toISOString()}`;
+        }
+    });
+}
+</script>
+{% endblock %}

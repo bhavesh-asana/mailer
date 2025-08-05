@@ -18,4 +18,7 @@ urlpatterns = [
     path('api/send-bulk-email/', views.SendBulkEmailView.as_view(), name='send-bulk-email'),
     path('api/stats/', views.EmailStatsView.as_view(), name='email-stats'),
     path('api/health/', views.health_check, name='health-check'),
+    path('scheduled-email-dashboard/', views.scheduled_email_dashboard, name='scheduled-email-dashboard'),
+    path('sequential-email-dashboard/', views.sequential_email_dashboard, name='sequential-email-dashboard'),
+    path('debug-sequential-form/', views.debug_sequential_form, name='debug-sequential-form'),
 ]

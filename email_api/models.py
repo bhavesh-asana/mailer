@@ -190,6 +190,186 @@ class EmailLog(models.Model):
         ordering = ['-created_at']
 
 
+class SequentialEmailCampaign(models.Model):
+    """Model for sequential email campaigns with time intervals between recipients"""
+    name = models.CharField(max_length=200)
+    template = models.ForeignKey(EmailTemplate, on_delete=models.CASCADE)
+    recipients = models.ManyToManyField(Recipient, through='SequentialEmailRecipient')
+    
+    # Interval settings
+    interval_minutes = models.IntegerField(
+        default=10,
+        help_text="Time interval in minutes between each email"
+    )
+    
+    # Start time - split into separate date and time fields to avoid Django datetime widget issues
+    start_date = models.DateField(help_text="Date to start sending emails", null=True, blank=True)
+    start_time = models.TimeField(help_text="Time to start sending the first email", null=True, blank=True)
+    
+    # Status
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('scheduled', 'Scheduled'),
+        ('sending', 'Sending'),
+        ('completed', 'Completed'),
+        ('paused', 'Paused'),
+        ('cancelled', 'Cancelled'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    
+    # Metadata
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Statistics
+    total_recipients = models.IntegerField(default=0)
+    emails_sent = models.IntegerField(default=0)
+    emails_failed = models.IntegerField(default=0)
+    current_recipient_index = models.IntegerField(default=0)
+    
+    def __str__(self):
+        return f"{self.name} (Sequential - {self.interval_minutes}min intervals)"
+    
+    @property
+    def start_datetime(self):
+        """Combine date and time fields into a timezone-aware datetime object"""
+        if self.start_date and self.start_time:
+            from datetime import datetime
+            from django.utils import timezone
+            # Create naive datetime first
+            naive_dt = datetime.combine(self.start_date, self.start_time)
+            # Make it timezone-aware using the default timezone
+            return timezone.make_aware(naive_dt, timezone.get_current_timezone())
+        return None
+    
+    def get_next_send_time(self):
+        """Calculate when the next email should be sent"""
+        if self.current_recipient_index == 0:
+            return self.start_datetime
+        
+        from datetime import timedelta
+        return self.start_datetime + timedelta(
+            minutes=self.interval_minutes * self.current_recipient_index
+        )
+    
+    def get_recipient_schedule(self):
+        """Get the complete schedule for all recipients"""
+        recipients = self.sequential_recipients.all().order_by('send_order')
+        schedule = []
+        
+        for i, seq_recipient in enumerate(recipients):
+            from datetime import timedelta
+            send_time = self.start_datetime + timedelta(minutes=self.interval_minutes * i)
+            schedule.append({
+                'recipient': seq_recipient.recipient,
+                'send_order': seq_recipient.send_order,
+                'scheduled_time': send_time,
+                'status': seq_recipient.status
+            })
+        
+        return schedule
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
+class SequentialEmailRecipient(models.Model):
+    """Through model for sequential email campaigns with send order"""
+    campaign = models.ForeignKey(
+        SequentialEmailCampaign, 
+        on_delete=models.CASCADE,
+        related_name='sequential_recipients'
+    )
+    recipient = models.ForeignKey(Recipient, on_delete=models.CASCADE)
+    send_order = models.IntegerField(help_text="Order in which to send emails (0-based)")
+    
+    # Status tracking
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('scheduled', 'Scheduled'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+        ('skipped', 'Skipped'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    # Timing
+    scheduled_time = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    
+    # Error tracking
+    error_message = models.TextField(blank=True)
+    retry_count = models.IntegerField(default=0)
+    
+    def __str__(self):
+        return f"{self.campaign.name} → {self.recipient.email} (Order: {self.send_order})"
+    
+    class Meta:
+        ordering = ['send_order']
+        unique_together = ('campaign', 'recipient')
+
+
+class ScheduledEmailCampaign(models.Model):
+    """Model for scheduled email campaigns with intervals"""
+    name = models.CharField(max_length=200)
+    template = models.ForeignKey(EmailTemplate, on_delete=models.CASCADE)
+    recipients = models.ManyToManyField(Recipient, blank=True)
+    
+    # Scheduling options
+    INTERVAL_CHOICES = [
+        ('once', 'Send Once'),
+        ('hourly', 'Every Hour'),
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    ]
+    interval = models.CharField(max_length=20, choices=INTERVAL_CHOICES, default='once')
+    
+    # Date/time settings
+    scheduled_datetime = models.DateTimeField(help_text="When to start sending emails")
+    end_datetime = models.DateTimeField(null=True, blank=True, help_text="When to stop recurring emails (optional)")
+    
+    # Status
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('scheduled', 'Scheduled'),
+        ('active', 'Active'),
+        ('paused', 'Paused'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    
+    # Metadata
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    next_send_at = models.DateTimeField(null=True, blank=True)
+    
+    # Statistics
+    total_sent = models.IntegerField(default=0)
+    total_failed = models.IntegerField(default=0)
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_interval_display()})"
+    
+    def save(self, *args, **kwargs):
+        # Calculate next_send_at based on interval
+        if self.scheduled_datetime and self.status in ['scheduled', 'active']:
+            if self.interval == 'once':
+                self.next_send_at = self.scheduled_datetime
+            elif not self.next_send_at:
+                self.next_send_at = self.scheduled_datetime
+        super().save(*args, **kwargs)
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
 class EmailConfiguration(models.Model):
     """Model for storing email server configurations"""
     name = models.CharField(max_length=200, unique=True)

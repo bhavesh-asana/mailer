@@ -1,0 +1,17 @@
+{% include "django/forms/widgets/input.html" %}
+<script>
+// Chicago timezone support for time picker
+document.addEventListener('DOMContentLoaded', function() {
+    const timeInput = document.querySelector('input[name="{{ widget.name }}"]');
+    if (timeInput) {
+        // Set default to current time + 5 minutes if no value
+        if (!timeInput.value) {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 5); // 5 minutes from now
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            timeInput.value = `${hours}:${minutes}`;
+        }
+    }
+});
+</script>

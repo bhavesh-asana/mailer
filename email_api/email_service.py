@@ -272,3 +272,478 @@ def get_email_sender(config_name: str = None) -> EmailSender:
             logger.warning(f"Email configuration '{config_name}' not found, using default")
     
     return EmailSender()
+
+
+def send_single_email(template, recipient_email, recipient_name='', variables=None):
+    """
+    Send a single email using a template
+    
+    Args:
+        template: EmailTemplate object
+        recipient_email: str - recipient email address
+        recipient_name: str - recipient name
+        variables: dict - variables for template substitution
+    
+    Returns:
+        dict with success status and error message if any
+    """
+    try:
+        from string import Template
+        
+        # Prepare variables for template substitution
+        if variables is None:
+            variables = {}
+        
+        # Add default variables
+        default_vars = {
+            'name': recipient_name or recipient_email,
+            'first_name': variables.get('first_name', ''),
+            'last_name': variables.get('last_name', ''),
+            'email': recipient_email,
+            'company': variables.get('company', ''),
+        }
+        default_vars.update(variables)
+        
+        # Render template
+        subject_template = Template(template.subject)
+        body_template = Template(template.body)
+        
+        rendered_subject = subject_template.safe_substitute(**default_vars)
+        rendered_body = body_template.safe_substitute(**default_vars)
+        
+        # Get template attachments
+        attachment_ids = [ta.attachment.id for ta in template.attachments.all()]
+        
+        # Create email data
+        email_data = EmailData(
+            to_email=recipient_email,
+            to_name=recipient_name,
+            subject=rendered_subject,
+            body=rendered_body,
+            is_html=template.is_html,
+            attachment_ids=attachment_ids
+        )
+        
+        # Send email
+        sender = get_email_sender()
+        success = sender.send_single_email(email_data)
+        
+        return {
+            'success': success,
+            'sent_count': 1 if success else 0,
+            'failed_count': 0 if success else 1
+        }
+        
+    except Exception as e:
+        logger.error(f"Error sending single email: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'sent_count': 0,
+            'failed_count': 1
+        }
+
+
+def send_scheduled_campaign_emails(scheduled_campaign):
+    """
+    Send emails for a scheduled campaign
+    
+    Args:
+        scheduled_campaign: ScheduledEmailCampaign object
+    
+    Returns:
+        dict with results
+    """
+    try:
+        from string import Template
+        
+        template = scheduled_campaign.template
+        recipients = scheduled_campaign.recipients.filter(is_active=True)
+        
+        if not recipients.exists():
+            return {
+                'success': False,
+                'error': 'No active recipients found',
+                'sent_count': 0,
+                'failed_count': 0
+            }
+        
+        sender = get_email_sender()
+        sent_count = 0
+        failed_count = 0
+        
+        # Create EmailCampaign for logging
+        from .models import EmailCampaign
+        email_campaign = EmailCampaign.objects.create(
+            name=f"{scheduled_campaign.name} - {timezone.now().strftime('%Y-%m-%d %H:%M')}",
+            template=template,
+            subject=template.subject,
+            body=template.body,
+            is_html=template.is_html,
+            created_by=scheduled_campaign.created_by,
+            status='sending',
+            started_at=timezone.now()
+        )
+        
+        # Get template attachments
+        attachment_ids = [ta.attachment.id for ta in template.attachments.all()]
+        
+        for recipient in recipients:
+            try:
+                # Prepare variables for template substitution
+                variables = {
+                    'name': recipient.name or recipient.email,
+                    'first_name': recipient.first_name,
+                    'last_name': recipient.last_name,
+                    'email': recipient.email,
+                    'company': recipient.company,
+                }
+                
+                # Add custom data if available
+                if recipient.additional_data:
+                    variables.update(recipient.additional_data)
+                
+                # Render template
+                subject_template = Template(template.subject)
+                body_template = Template(template.body)
+                
+                rendered_subject = subject_template.safe_substitute(**variables)
+                rendered_body = body_template.safe_substitute(**variables)
+                
+                # Create email data
+                email_data = EmailData(
+                    to_email=recipient.email,
+                    to_name=recipient.name,
+                    subject=rendered_subject,
+                    body=rendered_body,
+                    is_html=template.is_html,
+                    attachment_ids=attachment_ids
+                )
+                
+                # Send email
+                success = sender.send_single_email(email_data, email_campaign.id)
+                if success:
+                    sent_count += 1
+                else:
+                    failed_count += 1
+                    
+            except Exception as e:
+                logger.error(f"Error sending email to {recipient.email}: {e}")
+                failed_count += 1
+        
+        # Update campaign status
+        email_campaign.status = 'completed'
+        email_campaign.completed_at = timezone.now()
+        email_campaign.save()
+        
+        # Update scheduled campaign statistics
+        scheduled_campaign.total_sent += sent_count
+        scheduled_campaign.total_failed += failed_count
+        scheduled_campaign.last_sent_at = timezone.now()
+        
+        # Calculate next send time for recurring campaigns
+        if scheduled_campaign.interval != 'once':
+            next_send = calculate_next_send_time(
+                scheduled_campaign.last_sent_at,
+                scheduled_campaign.interval
+            )
+            
+            # Check if we should continue (end_datetime check)
+            if (not scheduled_campaign.end_datetime or 
+                next_send <= scheduled_campaign.end_datetime):
+                scheduled_campaign.next_send_at = next_send
+                scheduled_campaign.status = 'active'
+            else:
+                scheduled_campaign.status = 'completed'
+                scheduled_campaign.next_send_at = None
+        else:
+            scheduled_campaign.status = 'completed'
+            scheduled_campaign.next_send_at = None
+        
+        scheduled_campaign.save()
+        
+        return {
+            'success': True,
+            'sent_count': sent_count,
+            'failed_count': failed_count,
+            'total_recipients': recipients.count()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error sending scheduled campaign emails: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'sent_count': 0,
+            'failed_count': 0
+        }
+
+
+def calculate_next_send_time(last_sent, interval):
+    """Calculate the next send time based on interval"""
+    from datetime import timedelta
+    
+    if interval == 'hourly':
+        return last_sent + timedelta(hours=1)
+    elif interval == 'daily':
+        return last_sent + timedelta(days=1)
+    elif interval == 'weekly':
+        return last_sent + timedelta(weeks=1)
+    elif interval == 'monthly':
+        # Approximate monthly as 30 days
+        return last_sent + timedelta(days=30)
+    else:
+        return last_sent
+
+
+def send_sequential_campaign_email(sequential_campaign_id):
+    """Send the next email in a sequential campaign"""
+    from .models import SequentialEmailCampaign, SequentialEmailRecipient
+    from datetime import timedelta
+    import threading
+    
+    try:
+        sequential_campaign = SequentialEmailCampaign.objects.get(id=sequential_campaign_id)
+        
+        # Get the next recipient to send to
+        next_recipient = SequentialEmailRecipient.objects.filter(
+            campaign=sequential_campaign,
+            status='pending'
+        ).order_by('send_order').first()
+        
+        if not next_recipient:
+            # No more recipients, mark campaign as completed
+            sequential_campaign.status = 'completed'
+            sequential_campaign.save()
+            logger.info(f"Sequential campaign {sequential_campaign.name} completed")
+            return {'success': True, 'message': 'Campaign completed'}
+        
+        # Check if it's time to send
+        now = timezone.now()
+        expected_send_time = (sequential_campaign.start_datetime + 
+                            timedelta(minutes=next_recipient.send_order * sequential_campaign.interval_minutes))
+        
+        if now < expected_send_time:
+            # Not yet time to send, schedule for later
+            delay_seconds = (expected_send_time - now).total_seconds()
+            if delay_seconds > 0:
+                timer = threading.Timer(delay_seconds, send_sequential_campaign_email, [sequential_campaign_id])
+                timer.start()
+                logger.info(f"Scheduled next email for {expected_send_time}")
+                return {'success': True, 'message': f'Next email scheduled for {expected_send_time}'}
+        
+        # Time to send the email
+        try:
+            # Get the template and recipient
+            template = sequential_campaign.template
+            recipient = next_recipient.recipient
+            
+            # Prepare variables for template rendering
+            variables = {
+                'name': recipient.name,
+                'first_name': recipient.name.split()[0] if recipient.name else '',
+                'last_name': ' '.join(recipient.name.split()[1:]) if len(recipient.name.split()) > 1 else '',
+                'email': recipient.email,
+                'company': '',  # Add company field if available in recipient model
+            }
+            
+            # Render template with placeholders
+            from string import Template
+            
+            subject_template = Template(template.subject)
+            body_template = Template(template.body)
+            
+            rendered_subject = subject_template.safe_substitute(**variables)
+            rendered_body = body_template.safe_substitute(**variables)
+            
+            # Get template attachments
+            attachment_ids = [ta.attachment.id for ta in template.attachments.all()]
+            
+            # Prepare email data
+            email_data = EmailData(
+                to_email=recipient.email,
+                to_name=recipient.name,
+                subject=rendered_subject,
+                body=rendered_body,
+                is_html=template.is_html,
+                attachment_ids=attachment_ids
+            )
+            
+            # Send the email
+            sender = get_email_sender()
+            success = sender.send_single_email(email_data, campaign_id=sequential_campaign.id)
+            
+            if success:
+                # Update recipient status
+                next_recipient.status = 'sent'
+                next_recipient.sent_at = timezone.now()
+                next_recipient.save()
+                
+                # Update campaign progress
+                sequential_campaign.emails_sent += 1
+                
+                # Check if this was the last email
+                remaining_recipients = SequentialEmailRecipient.objects.filter(
+                    campaign=sequential_campaign,
+                    status='pending'
+                ).count()
+                
+                if remaining_recipients == 0:
+                    sequential_campaign.status = 'completed'
+                    logger.info(f"Sequential campaign {sequential_campaign.name} completed")
+                else:
+                    # Schedule next email
+                    next_delay_minutes = sequential_campaign.interval_minutes
+                    timer = threading.Timer(
+                        next_delay_minutes * 60, 
+                        send_sequential_campaign_email, 
+                        [sequential_campaign_id]
+                    )
+                    timer.start()
+                    logger.info(f"Next email scheduled in {next_delay_minutes} minutes")
+                
+                sequential_campaign.save()
+                
+                return {
+                    'success': True,
+                    'recipient': recipient.email,
+                    'send_order': next_recipient.send_order,
+                    'remaining': remaining_recipients
+                }
+            else:
+                # Mark as failed and continue with next
+                next_recipient.status = 'failed'
+                next_recipient.save()
+                
+                # Try to send next email after a short delay
+                timer = threading.Timer(60, send_sequential_campaign_email, [sequential_campaign_id])  # 1 minute delay
+                timer.start()
+                
+                return {
+                    'success': False,
+                    'error': f'Failed to send to {recipient.email}',
+                    'recipient': recipient.email
+                }
+                
+        except Exception as e:
+            logger.error(f"Error sending sequential email: {e}")
+            # Mark recipient as failed
+            next_recipient.status = 'failed'
+            next_recipient.save()
+            
+            # Try next recipient after delay
+            timer = threading.Timer(60, send_sequential_campaign_email, [sequential_campaign_id])
+            timer.start()
+            
+            return {'success': False, 'error': str(e)}
+            
+    except SequentialEmailCampaign.DoesNotExist:
+        logger.error(f"Sequential campaign {sequential_campaign_id} not found")
+        return {'success': False, 'error': 'Campaign not found'}
+    except Exception as e:
+        logger.error(f"Error in sequential campaign processing: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def start_sequential_campaign(sequential_campaign_id):
+    """Start a sequential email campaign"""
+    from .models import SequentialEmailCampaign
+    
+    try:
+        sequential_campaign = SequentialEmailCampaign.objects.get(id=sequential_campaign_id)
+        
+        if sequential_campaign.status != 'draft':
+            return {'success': False, 'error': 'Campaign is not in draft status'}
+        
+        # Update campaign status
+        sequential_campaign.status = 'sending'
+        sequential_campaign.save()
+        
+        # Start the sequential sending process
+        now = timezone.now()
+        if sequential_campaign.start_datetime <= now:
+            # Start immediately
+            send_sequential_campaign_email(sequential_campaign_id)
+        else:
+            # Schedule for start time
+            delay_seconds = (sequential_campaign.start_datetime - now).total_seconds()
+            import threading
+            timer = threading.Timer(delay_seconds, send_sequential_campaign_email, [sequential_campaign_id])
+            timer.start()
+            logger.info(f"Sequential campaign scheduled to start at {sequential_campaign.start_datetime}")
+        
+        return {
+            'success': True,
+            'message': 'Sequential campaign started',
+            'start_time': sequential_campaign.start_datetime
+        }
+        
+    except SequentialEmailCampaign.DoesNotExist:
+        return {'success': False, 'error': 'Campaign not found'}
+    except Exception as e:
+        logger.error(f"Error starting sequential campaign: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def pause_sequential_campaign(sequential_campaign_id):
+    """Pause a sequential email campaign"""
+    from .models import SequentialEmailCampaign
+    
+    try:
+        sequential_campaign = SequentialEmailCampaign.objects.get(id=sequential_campaign_id)
+        
+        if sequential_campaign.status == 'sending':
+            sequential_campaign.status = 'paused'
+            sequential_campaign.save()
+            return {'success': True, 'message': 'Campaign paused'}
+        else:
+            return {'success': False, 'error': 'Campaign is not currently sending'}
+            
+    except SequentialEmailCampaign.DoesNotExist:
+        return {'success': False, 'error': 'Campaign not found'}
+    except Exception as e:
+        logger.error(f"Error pausing sequential campaign: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def resume_sequential_campaign(sequential_campaign_id):
+    """Resume a paused sequential email campaign"""
+    from .models import SequentialEmailCampaign
+    
+    try:
+        sequential_campaign = SequentialEmailCampaign.objects.get(id=sequential_campaign_id)
+        
+        if sequential_campaign.status == 'paused':
+            sequential_campaign.status = 'sending'
+            sequential_campaign.save()
+            
+            # Resume sending
+            send_sequential_campaign_email(sequential_campaign_id)
+            return {'success': True, 'message': 'Campaign resumed'}
+        else:
+            return {'success': False, 'error': 'Campaign is not paused'}
+            
+    except SequentialEmailCampaign.DoesNotExist:
+        return {'success': False, 'error': 'Campaign not found'}
+    except Exception as e:
+        logger.error(f"Error resuming sequential campaign: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def cancel_sequential_campaign(sequential_campaign_id):
+    """Cancel a sequential email campaign"""
+    from .models import SequentialEmailCampaign
+    
+    try:
+        sequential_campaign = SequentialEmailCampaign.objects.get(id=sequential_campaign_id)
+        
+        sequential_campaign.status = 'cancelled'
+        sequential_campaign.save()
+        
+        return {'success': True, 'message': 'Campaign cancelled'}
+            
+    except SequentialEmailCampaign.DoesNotExist:
+        return {'success': False, 'error': 'Campaign not found'}
+    except Exception as e:
+        logger.error(f"Error cancelling sequential campaign: {e}")
+        return {'success': False, 'error': str(e)}
