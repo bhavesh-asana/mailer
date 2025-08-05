@@ -34,8 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     
     permissions:
-      contents: write
-      pull-requests: read
+      contents: write # Needed to push tags and create releases
+      pull-requests: write  # Needed to create PRs for branch releases
 
     steps:
       - name: Checkout code
