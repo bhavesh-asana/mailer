@@ -134,7 +134,7 @@ jobs:
             fi
             
             # Default for any other branch
-            echo "dev"
+            echo "other|dev"
           }
           
           RESULT=$(determine_branch_type "$BRANCH_NAME")
@@ -315,8 +315,14 @@ jobs:
                 NEW_VERSION="v$MAJOR.$MINOR.$PATCH-${CATEGORY}.${CLEAN_BRANCH}.${SHORT_SHA}"
               fi
               ;;
+            other)
+              # Handle 'other' branch type specifically
+              PATCH=$((PATCH + 1))
+              CLEAN_BRANCH=$(generate_clean_identifier "$BRANCH_NAME")
+              NEW_VERSION="v$MAJOR.$MINOR.$PATCH-dev.${CLEAN_BRANCH}.${SHORT_SHA}"
+              ;;
             *)
-              # Other branches (including 'other')
+              # Default fallback for any unhandled branch types
               PATCH=$((PATCH + 1))
               CLEAN_BRANCH=$(generate_clean_identifier "$BRANCH_NAME")
               NEW_VERSION="v$MAJOR.$MINOR.$PATCH-dev.${CLEAN_BRANCH}.${SHORT_SHA}"
